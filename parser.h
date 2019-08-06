@@ -69,26 +69,32 @@ const uint8_t FAIL_READ_ERROR_CODE_BASE = 0xa0;//-0x60;
 const uint8_t FAIL_READ_MEMORY_NO_TAG = 0x9;
 const uint8_t FAIL_WRITE_ERROR_CODE_BASE = 0xb0;//-0x50;
 const uint8_t FAIL_WRITE_MEMORY_NO_TAG = 0x10;
+
 const uint8_t FRAME_BEGIN = 0xbb;//-0x45;
 const uint8_t FRAME_END = 0x7e;
+
 const uint8_t FRAME_TYPE_ANS = 0x1;
 const uint8_t FRAME_TYPE_CMD = 0x0;
 const uint8_t FRAME_TYPE_INFO = 0x2;
+
 const uint8_t INVENTORY_MODE0 = 0x0;
 const uint8_t INVENTORY_MODE1 = 0x1;
 const uint8_t INVENTORY_MODE2 = 0x2;
+
 const uint8_t MODULE_HARDWARE_VERSION_FIELD = 0x0;
 const uint8_t MODULE_MANUFACTURE_INFO_FIELD = 0x2;
 const uint8_t MODULE_SOFTWARE_VERSION_FIELD = 0x1;
+
 const uint8_t REGION_CODE_CHN1 = 0x4;
 const uint8_t REGION_CODE_CHN2 = 0x1;
 const uint8_t REGION_CODE_EUR = 0x3;
 const uint8_t REGION_CODE_JAPAN = 0x5;
 const uint8_t REGION_CODE_KOREA = 0x6;
 const uint8_t REGION_CODE_US = 0x2;
+
 const uint8_t SET_OFF = 0x0;
 const uint8_t SET_ON = 0xff;//-0x1;
-const uint8_t SUCCESS_MSG_DATA:B
+
 
 
 #endif //PARSER_H
