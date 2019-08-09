@@ -61,7 +61,6 @@ uint8_t* read_frame(uint8_t* frame, uint16_t *len)
     return *payload;
 }
 
-
 /*
  * calculates the checksum, assumes that the first byte is the FRAME_BEGIN header byte
  */
@@ -159,14 +158,6 @@ uint8_t* BuildIoControlFrame(uint8_t* buf, uint8_t* io_payload)
     return build_cmd_frame(buf, cmd, len, uint8_t* io_payload);
 }
 
-
-
-
-
-
-
-
-
 /*
  *  read at most tag_count tags
  */
@@ -196,14 +187,6 @@ BuildKillFrame(uint8_t* buf, uint8_t* password)
 {
     return build_cmd_frame(buf, CMD_KILL, 4, password);
 }
-
-
-
-
-
-
-
-
 
 //baud is baud rate in hz.
 //the change is effective immediately
@@ -316,7 +299,6 @@ BuildWriteDataFrame(uint8_t* buf, uint8_t* password, uint8_t bank, uint32_t data
     return build_cmd_frame(buf, cmd, len, payload);
 }
 
-
 BuildReadDataFrame(uint8_t* buf, strAccessPasswd, intMemBank, wordPtr, wordCnt)
 {
     uint8_t cmd = CMD_READ_DATA;
@@ -329,26 +311,73 @@ BuildReadDataFrame(uint8_t* buf, strAccessPasswd, intMemBank, wordPtr, wordCnt)
     memmove(payload, password, 4);
     payload[4] = bank;
     payload[5] = (data_ptr_words >> 8) & 0xff;
-    payload[6] = (data_ptr_words >> 0) & 0xff;
+    payload[6] = (data_ptr_words) & 0xff;
     payload[7] = (data_len_words >> 8) & 0xff;
-    payload[8] = (data_len_words >> 0) & 0xff;
+    payload[8] = (data_len_words) & 0xff;
     
-
     return build_cmd_frame(buf, cmd, len, NULL);
 }
 
-
-
-
-
-
-
-BuildLockFrame(uint8_t* buf, textBoxLockAccessPwd.Text, lockPayload)
+BuildLockFrame(uint8_t* buf, uint8_t* password, uint8_t* lock_payload)
 {
-    uint8_t cmd = ;
-    uint16_t len = 0;
+    uint8_t cmd = CMD_LOCK_UNLOCK;
+    uint16_t len = 7;
+    uint8_t* payload = buf;
+
+    memmove(&payload[4], lock_payload, 3)
+
+    memmove(payload, password, 4);
+
+    return build_cmd_frame(buf, cmd, len, payload);
+}
+
+BuildScanJammerFrame(uint8_t* buf)
+{
+    return build_cmd_frame(buf, CMD_SCAN_JAMMER);
+}
+BuildScanRssiFrame(uint8_t* buf)
+{
+    return build_cmd_empty_frame(buf, CMD_SCAN_RSSI);
+}
+BuildSetInventoryModeFrame(uint8_t* buf, uint8_t mode);
+{
+    return build_cmd_frame(CMD_SET_INVENTORY_MODE, cmd, 1, &mode);
+}
+
+
+
+BuildSetQueryFrame(uint8_t* buf, intDR, intM, intTRext, intSel, intSession, intTarget, intQ)
+{
+    uint8_t cmd = CMD_SET_QUERY;
+    uint16_t len = 2;
+    uint16_t bitmap = 
+
+    uint8_t payload[2];    
+    bitmap =
+     (d & 0x01)<<15) |
+     (m & 0x03)<<13) |
+     (trext & 0x01)<<12) |
+     (sel & 0x03)<<10) |
+     (session & 0x03)<<8) |
+     (target & 0x01)<<7) |
+     (Q & 0x0F)<<3)
+    
+    payload[0] = bitmap >> 8;
+    payload[1] = bitmap & 0xff
     return build_cmd_frame(buf, cmd, len, NULL);
 }
+
+
+
+
+
+
+
+
+
+
+
+
 BuildMonzaQTFrame(uint8_t* buf, strAccessPasswd, false, cbxMonzaQT_SR.Checked, cbxMonzaQT_MEM.Checked)
 {
     uint8_t cmd = ;
@@ -393,26 +422,7 @@ BuildSaveConfigToNvFrame(uint8_t* buf, NV_enable)
     uint16_t len = 0;
     return build_cmd_frame(buf, cmd, len, NULL);
 }
-BuildScanJammerFrame(uint8_t* buf)
-{
-    uint8_t cmd = ;
-    uint16_t len = 0;
-    return build_cmd_frame(buf, cmd, len, NULL);
-}
-BuildScanRssiFrame(uint8_t* buf)
-{
-    uint8_t cmd = ;
-    uint16_t len = 0;
-    return build_cmd_frame(buf, cmd, len, NULL);
-}
 
-
-BuildSetInventoryModeFrame(uint8_t* buf, ConstCode.INVENTORY_MODE1);  //INVENTORY_MODE
-{
-    uint8_t cmd = ;
-    uint16_t len = 0;
-    return build_cmd_frame(buf, cmd, len, NULL);
-}
 BuildSetModemParaFrame(uint8_t* buf, mixerGain, IFAmpGain, signalTh)
 {
     uint8_t cmd = ;
@@ -420,12 +430,9 @@ BuildSetModemParaFrame(uint8_t* buf, mixerGain, IFAmpGain, signalTh)
     return build_cmd_frame(buf, cmd, len, NULL);
 }
 
-BuildSetQueryFrame(uint8_t* buf, intDR, intM, intTRext, intSel, intSession, intTarget, intQ)
-{
-    uint8_t cmd = ;
-    uint16_t len = 0;
-    return build_cmd_frame(buf, cmd, len, NULL);
-}
+
+
+
 BuildSetReaderEnvModeFrame(uint8_t* buf, (byte)cbxMode.SelectedIndex)
 {
     uint8_t cmd = ;
