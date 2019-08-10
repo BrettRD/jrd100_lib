@@ -86,12 +86,47 @@ const uint8_t MODULE_HARDWARE_VERSION_FIELD = 0x00;
 const uint8_t MODULE_MANUFACTURE_INFO_FIELD = 0x02;
 const uint8_t MODULE_SOFTWARE_VERSION_FIELD = 0x01;
 
-const uint8_t REGION_CODE_CHN1 = 0x04;
-const uint8_t REGION_CODE_CHN2 = 0x01;
-const uint8_t REGION_CODE_EUR = 0x03;
-const uint8_t REGION_CODE_JAPAN = 0x05;
-const uint8_t REGION_CODE_KOREA = 0x06;
-const uint8_t REGION_CODE_US = 0x02;
+const uint8_t REGION_CHN2_CODE = 0x01;
+const uint8_t REGION_US_CODE = 0x02;
+const uint8_t REGION_EUR_CODE = 0x03;
+const uint8_t REGION_CHN1_CODE = 0x04;
+const uint8_t REGION_JAPAN_CODE = 0x05;
+const uint8_t REGION_KOREA_CODE = 0x06;
+
+const float REGION_CHN2_FREQ_START = 840.1;
+const float REGION_US_FREQ_START = 902.25;
+const float REGION_EUR_FREQ_START = 865.1;
+const float REGION_CHN1_FREQ_START = 920.125;
+const float REGION_JAPAN_FREQ_START = -1;   //not documented
+const float REGION_KOREA_FREQ_START = 917.1;
+
+const float REGION_CHN2_FREQ_SEPARATION = 0.25;
+const float REGION_US_FREQ_SEPARATION = 0.5;
+const float REGION_EUR_FREQ_SEPARATION = 0.2;
+const float REGION_CHN1_FREQ_SEPARATION = 0.25;
+const float REGION_JAPAN_FREQ_SEPARATION = -1;  //not documented
+const float REGION_KOREA_FREQ_SEPARATION = 0.2;
+
+const float REGION_FREQ_STARTS[] = 
+    {
+        REGION_CHN2_FREQ_START,
+        REGION_US_FREQ_START,
+        REGION_EUR_FREQ_START,
+        REGION_CHN1_FREQ_START,
+        REGION_JAPAN_FREQ_START,
+        REGION_KOREA_FREQ_START
+    }
+
+const float REGION_FREQ_SEPARATIONS[] = 
+    {
+        REGION_CHN2_FREQ_SEPARATION,
+        REGION_US_FREQ_SEPARATION,
+        REGION_EUR_FREQ_SEPARATION,
+        REGION_CHN1_FREQ_SEPARATION,
+        REGION_JAPAN_FREQ_SEPARATION,
+        REGION_KOREA_FREQ_SEPARATION
+    }
+
 
 const uint8_t SET_OFF = 0x00;
 const uint8_t SET_ON = 0xff;//-0x1;
