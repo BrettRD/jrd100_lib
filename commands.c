@@ -2,11 +2,6 @@
 
 
 
-uint8_t* build_cmd_empty_frame(uint8_t*buf, uint8_t cmd)
-{
-    return build_cmd_frame(buf, cmd, 0, NULL)
-
-}
 
 /*
  * builds a command frame.
@@ -27,22 +22,34 @@ uint8_t* build_cmd_frame(uint8_t* buf, uint8_t cmd, uint16_t len, uint8_t* paylo
     buf[6 + len] = FRAME_END;
 }
 
+uint8_t* build_cmd_empty_frame(uint8_t*buf, uint8_t cmd)
+{
+    return build_cmd_frame(buf, cmd, 0, NULL)
+}
+
+/*
+ * a lot of commands use a single byte payload to indicate success
+ */
+void read_empty_frame(uint16_t len, uint8_t* payload, uint8_t *error)
+{
+    *error = payload[0];
+}
 
 /*
  * reads data from a frame into pointers
  * returns the payload pointer into the frame buffer, or null if the frame is malformed
  */
 
-uint8_t* read_frame(uint8_t* frame, uint16_t *len)
+uint8_t* read_frame(uint8_t* frame, uint8_t *frame_type, uint8_t *cmd, uint16_t *len)
 {
     uint8_t frame_header = frame[0];
-    uint8_t frame_type = frame[1];
-    uint8_t cmd = frame[2];
+    *frame_type = frame[1];
+    *cmd = frame[2];
     *len = (frame[3] << 8) + frame[4];
-    *payload = frame[5];
-    uint8_t received_cs = frame[5 + *len];
+    uint8_t* payload = frame[5];
+    uint8_t received_cs = payload[5 + *len];
     uint8_t frame_terminator = frame[6 + *len];
-    uint8_t expected_cs = calc_frame_checksum(buf, *len);
+    uint8_t expected_cs = calc_frame_checksum(frame, *len);
 
     if(frame_header == FRAME_BEGIN)
     {
@@ -50,15 +57,17 @@ uint8_t* read_frame(uint8_t* frame, uint16_t *len)
         {
             if(frame_terminator == FRAME_END)
             {
-                return *payload;
+                return payload;
             }
         }
     }
 
     //no access to failed frames
-    *payload = NULL;
+    *frame_type = 0;
+    *cmd = 0;
     *len = 0;
-    return *payload;
+    *payload = NULL;
+    return payload;
 }
 
 /*
@@ -109,9 +118,10 @@ BuildInsertRfChFrame(uint8_t* buf, channelNum, channelList)
 }
 uint8_t* build_io_payload(uint8_t* payload, uint8_t pin, uint8_t config, uint8_t dir)
 {
-    //config = 0; //set io direction (input vs output)
-    //config = 1; //set io output level
-    //config = 2; //read io input level
+    //config = 0; //set io direction (input/output)
+    //config = 1; //set io output level (high/low)
+    //config = 2; //read io input level (dir is meaningless)
+
 
     //dir = 0; //input, low, fail
     //dir = 1; //output, high, sucess
@@ -140,12 +150,17 @@ uint8_t* build_io_payload(uint8_t* payload, uint8_t pin, uint8_t config, uint8_t
     return payload;
 }
 
-void read_io_payload(uint8_t* payload, uint8_t* pin, uint8_t* config, uint8_t* dir)
+void read_io_payload(uint16_t len, uint8_t* payload, uint8_t* pin, uint8_t* config, uint8_t* dir)
 {
+    if(len != 3)
+    {
+        //XXX error, wrong packet length
+    }
     *config = payload[0];
     *pin = payload[1];
     *dir = payload[2];
 }
+
 
 uint8_t* BuildIoControlFrame(uint8_t* buf, uint8_t* io_payload)
 {
@@ -158,10 +173,19 @@ uint8_t* BuildIoControlFrame(uint8_t* buf, uint8_t* io_payload)
     return build_cmd_frame(buf, cmd, len, uint8_t* io_payload);
 }
 
+
 /*
  *  read at most tag_count tags
  */
-BuildReadMultiFrame(uint8_t* buf, uint16_t tag_count)
+uint8_t* BuildReadSingleFrame(uint8_t* buf)
+{
+    return build_cmd_empty_frame(buf, CMD_INVENTORY);
+}
+
+/*
+ *  read at most tag_count tags
+ */
+uint8_t* BuildReadMultiFrame(uint8_t* buf, uint16_t tag_count)
 {
     uint8_t cmd = CMD_READ_MULTI;
     uint16_t len = 3;
@@ -172,24 +196,50 @@ BuildReadMultiFrame(uint8_t* buf, uint16_t tag_count)
 
     return build_cmd_frame(buf, cmd, len, payload);
 }
-BuildStopReadFrame(uint8_t* buf)
+
+
+void ReadTagNotification(uint16_t len, uint8_t *payload, uint8_t *rssi, uint16_t *pc, uint8_t *epc_len, uint8_t* epc, uint8_t* crc)
+{
+    *epc_len = len - 5;
+    memmove(epc, &payload[3], epc_len);
+    memmove(crc, &payload[3 + epc_len],2);
+    *rssi = payload[0];
+    *pc = payload[1]<<8 + payload[2];
+    //payload
+    //crc
+}
+
+/*
+ * stop multiple read mode
+ */
+uint8_t* BuildStopReadFrame(uint8_t* buf)
 {
     return build_cmd_empty_frame(buf, CMD_STOP_MULTI);
 }
-
-BuildReadSingleFrame(uint8_t* buf)
+void ReadStopReadFrame(uint16_t len, uint8_t* payload, uint8_t *error)
 {
-    return build_cmd_empty_frame(buf, CMD_INVENTORY);
+    read_empty_frame(len, payload, error);
 }
-
 
 BuildKillFrame(uint8_t* buf, uint8_t* password)
 {
     return build_cmd_frame(buf, CMD_KILL, 4, password);
 }
+void ReadKillFrame(uint16_t len, uint8_t* payload, uint8_t *epc_len, uint8_t* pc, uint8_t* epc, uint8_t *error)
+{
+    *epc_len = payload[0] - 2;
+    if(*epc_len != (len-4))
+    {
+        //malformed?
+    }
+    memmove(pc, &payload[1],2);
+    memmove(pc, &payload[3],epc_len-2);
+    *error = payload[3 + epc_len];
+}
 
 //baud is baud rate in hz.
 //the change is effective immediately
+//there is no response from this frame
 BuildSetBaudFrame(uint8_t* buf, uint32_t baud_hz)
 {
     uint8_t cmd = CMD_SET_BAUD;
@@ -200,6 +250,8 @@ BuildSetBaudFrame(uint8_t* buf, uint32_t baud_hz)
 
     return build_cmd_frame(buf, cmd, len, payload);
 }
+
+
 
 //XXX undocumented command
 BuildSetCWFrame(uint8_t* buf, uint8_t setting)
@@ -214,6 +266,10 @@ BuildSetFhssFrame(uint8_t* buf, uint8_t setting)
     uint8_t cmd = CMD_SET_FHSS;
     uint16_t len = 1;
     return build_cmd_frame(buf, cmd, len, &setting);
+}
+void ReadSetFhssFrame(uint16_t len, uint8_t *payload, uint8_t *error)
+{
+    read_empty_frame(len, payload, error);
 }
 
 BuildSetModuleSleepFrame(uint8_t* buf)
@@ -236,6 +292,8 @@ BuildSetRegionFrame(uint8_t* buf, uint8_t region_code)
     uint16_t len = 1;
     return build_cmd_frame(buf, cmd, len, &region_code);
 }
+
+
 BuildSetRfChannelFrame(uint8_t* buf, uint8_t channel_index)
 {
     uint8_t cmd = CMD_SET_RF_CHANNEL;
@@ -281,14 +339,15 @@ BuildWriteDataFrame(uint8_t* buf, uint8_t* password, uint8_t bank, uint32_t data
 {
     uint8_t cmd = CMD_WRITE_DATA;
     uint16_t len = 9 + data_len;
-    uint8_t* payload = buf;
+    uint8_t* payload = buf;  //moved to correct frame position by build_cmd_frame
     uint8_t data_len_words = data_len/2;
     uint8_t data_ptr_words = data_ptr/2;
 
-    //data may overlap with buf
+    //data and password may overlap with buf
+    uint8_t pwd[4];
+    memcpy(pwd, password, 4); 
     memmove(payload[9], data, data_len);
-
-    memmove(payload, password, 4);
+    memcpy(payload, pwd, 4);
 
     payload[4] = bank;
     payload[5] = (data_ptr_words >> 8) & 0xff;
@@ -299,14 +358,14 @@ BuildWriteDataFrame(uint8_t* buf, uint8_t* password, uint8_t bank, uint32_t data
     return build_cmd_frame(buf, cmd, len, payload);
 }
 
-BuildReadDataFrame(uint8_t* buf, strAccessPasswd, intMemBank, wordPtr, wordCnt)
+BuildReadDataFrame(uint8_t* buf, uint8_t* password, uint8_t bank, uint32_t data_ptr, uint32_t data_len)
 {
     uint8_t cmd = CMD_READ_DATA;
     uint16_t len = 9;
-    uint8_t data_len_words = data_len/2;
-    uint8_t data_ptr_words = data_ptr/2;
+    uint16_t data_len_words = data_len/2;
+    uint16_t data_ptr_words = data_ptr/2;
 
-    uint8_t* payload = buf;
+    uint8_t* payload = buf; //moved to correct frame position by build_cmd_frame
 
     memmove(payload, password, 4);
     payload[4] = bank;
@@ -315,18 +374,20 @@ BuildReadDataFrame(uint8_t* buf, strAccessPasswd, intMemBank, wordPtr, wordCnt)
     payload[7] = (data_len_words >> 8) & 0xff;
     payload[8] = (data_len_words) & 0xff;
     
-    return build_cmd_frame(buf, cmd, len, NULL);
+    return build_cmd_frame(buf, cmd, len, payload);
 }
 
 BuildLockFrame(uint8_t* buf, uint8_t* password, uint8_t* lock_payload)
 {
     uint8_t cmd = CMD_LOCK_UNLOCK;
     uint16_t len = 7;
-    uint8_t* payload = buf;
+    uint8_t* payload = buf; //moved to correct frame position by build_cmd_frame
 
+    //allow the variables to overloap with buf
+    uint8_t pwd[4];
+    memcpy(pwd, password, 4); 
     memmove(&payload[4], lock_payload, 3)
-
-    memmove(payload, password, 4);
+    memcpy(payload, pwd, 4);
 
     return build_cmd_frame(buf, cmd, len, payload);
 }
@@ -360,10 +421,46 @@ BuildSetQueryFrame(uint8_t* buf, intDR, intM, intTRext, intSel, intSession, intT
      (sel & 0x03)<<10) |
      (session & 0x03)<<8) |
      (target & 0x01)<<7) |
-     (Q & 0x0F)<<3)
+     (Q & 0x0F)<<3) ;
+     //lowest three bits are zero.
     
     payload[0] = bitmap >> 8;
     payload[1] = bitmap & 0xff
+    return build_cmd_frame(buf, cmd, len, payload);
+}
+
+
+/*
+//not complete
+
+
+
+BuildNXPChangeEasFrame(uint8_t* buf, strAccessPasswd, cbxSetEas.Checked)
+{
+    uint8_t cmd = CMD_NXP_CHANGE_EAS;
+    uint16_t len = 0;
+    return build_cmd_frame(buf, cmd, len, NULL);
+}
+
+BuildNXPEasAlarmFrame(uint8_t* buf)
+{
+    uint8_t cmd = CMD_NXP_EAS_ALARM;
+    uint16_t len = 0;
+    return build_cmd_frame(buf, cmd, len, NULL);
+}
+
+BuildNXPReadProtectFrame(uint8_t* buf, strAccessPasswd, cbxReadProtectReset.Checked)
+{
+    uint8_t cmd = CMD_NXP_READPROTECT;
+    uint16_t len = 0;
+    return build_cmd_frame(buf, cmd, len, NULL);
+}
+
+
+BuildNXPResetReadProtectFrame(uint8_t* buf, strAccessPasswd, cbxReadProtectReset.Checked)
+{
+    uint8_t cmd = CMD_NXP_RESET_READPROTECT;
+    uint16_t len = 0;
     return build_cmd_frame(buf, cmd, len, NULL);
 }
 
@@ -376,7 +473,13 @@ BuildSetQueryFrame(uint8_t* buf, intDR, intM, intTRext, intSel, intSession, intT
 
 
 
-
+//undocumented commands
+BuildSaveConfigToNvFrame(uint8_t* buf, NV_enable)
+{
+    uint8_t cmd = CMD_SAVE_NV_CONFIG;
+    uint16_t len = ;
+    return build_cmd_frame(buf, cmd, len, NULL);
+}
 
 BuildMonzaQTFrame(uint8_t* buf, strAccessPasswd, false, cbxMonzaQT_SR.Checked, cbxMonzaQT_MEM.Checked)
 {
@@ -386,56 +489,29 @@ BuildMonzaQTFrame(uint8_t* buf, strAccessPasswd, false, cbxMonzaQT_SR.Checked, c
 }
 BuildNXPChangeConfigFrame(uint8_t* buf, strAccessPasswd, Convert.ToInt32(txtConfigData.Text.Replace(" ",""), 16))
 {
-    uint8_t cmd = ;
-    uint16_t len = 0;
-    return build_cmd_frame(buf, cmd, len, NULL);
-}
-BuildNXPChangeEasFrame(uint8_t* buf, strAccessPasswd, cbxSetEas.Checked)
-{
-    uint8_t cmd = ;
-    uint16_t len = 0;
-    return build_cmd_frame(buf, cmd, len, NULL);
-}
-BuildNXPEasAlarmFrame(uint8_t* buf)
-{
-    uint8_t cmd = ;
-    uint16_t len = 0;
-    return build_cmd_frame(buf, cmd, len, NULL);
-}
-BuildNXPReadProtectFrame(uint8_t* buf, strAccessPasswd, cbxReadProtectReset.Checked)
-{
-    uint8_t cmd = ;
+    uint8_t cmd = CMD_NXP_CHANGE_CONFIG;
     uint16_t len = 0;
     return build_cmd_frame(buf, cmd, len, NULL);
 }
 
 BuildReadModemParaFrame(uint8_t* buf)
 {
-    uint8_t cmd = ;
-    uint16_t len = 0;
-    return build_cmd_frame(buf, cmd, len, NULL);
-}
-
-BuildSaveConfigToNvFrame(uint8_t* buf, NV_enable)
-{
-    uint8_t cmd = ;
+    uint8_t cmd = CMD_READ_MODEM_PARA;
     uint16_t len = 0;
     return build_cmd_frame(buf, cmd, len, NULL);
 }
 
 BuildSetModemParaFrame(uint8_t* buf, mixerGain, IFAmpGain, signalTh)
 {
-    uint8_t cmd = ;
+    uint8_t cmd = CMD_SET_MODEM_PARA;
     uint16_t len = 0;
     return build_cmd_frame(buf, cmd, len, NULL);
 }
-
-
-
 
 BuildSetReaderEnvModeFrame(uint8_t* buf, (byte)cbxMode.SelectedIndex)
 {
-    uint8_t cmd = ;
+    uint8_t cmd = CMD_SET_READER_ENV_MODE;
     uint16_t len = 0;
     return build_cmd_frame(buf, cmd, len, NULL);
 }
+*/
