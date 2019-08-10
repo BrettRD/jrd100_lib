@@ -76,20 +76,15 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             retval = 
         }
         break;
-        case CMD_INSERT_FHSS_CHANNEL:
-        {
-            retval = 
-        }
-        break;
         case CMD_INVENTORY:
         case CMD_READ_MULTI:
         {
             uint8_t rssi;
             uint16_t pc;
             uint8_t epc_len;
-            uint8_t epc[64];    //XXX these probably have a fixed size
-            uint8_t crc[2];
-            retval = ReadTagNotification(len, payload, &rssi, &pc, &epc_len, epc, crc);
+            uint8_t* epc;
+            uint16_t crc;
+            retval = ReadTagNotification(len, payload, &rssi, &pc, &epc_len, &epc, &crc);
             //XXX callback
             if(cmd == CMD_INVENTORY)
             {
@@ -134,54 +129,12 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             if(cb_kill_frame) cb_kill_frame(epc_len, pc, epc, error);
         }
         break;
-        case CMD_LOAD_NV_CONFIG:
-        {
-            //XXX undocumented
-            retval = 
-        }
-        break;
-        case CMD_SAVE_NV_CONFIG:
-        {
-            //XXX undocumented
-            retval = 
-        }
-        break;
         case CMD_LOCK_UNLOCK:
         {
             retval = 
         }
         break;
-        case CMD_NXP_CHANGE_CONFIG:
-        {
-            retval = 
-        }
-        break;
-        case CMD_NXP_CHANGE_EAS:
-        {
-            retval = 
-        }
-        break;
-        case CMD_NXP_EAS_ALARM:
-        {
-            retval = 
-        }
-        break;
-        case CMD_NXP_READPROTECT:
-        {
-            retval = 
-        }
-        break;
-        case CMD_NXP_RESET_READPROTECT:
-        {
-            retval = 
-        }
-        break;
         case CMD_READ_DATA:
-        {
-            retval = 
-        }
-        break;
-        case CMD_READ_MODEM_PARA:
         {
             retval = 
         }
@@ -201,11 +154,6 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             retval = 
         }
         break;
-        case CMD_SET_CW:
-        {
-            retval = 
-        }
-        break;
         case CMD_SET_FHSS:
         {
             retval = 
@@ -216,22 +164,12 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             retval = 
         }
         break;
-        case CMD_SET_MODEM_PARA:
-        {
-            retval = 
-        }
-        break;
         case CMD_SET_POWER:
         {
             retval = 
         }
         break;
         case CMD_SET_QUERY:
-        {
-            retval = 
-        }
-        break;
-        case CMD_SET_READER_ENV_MODE:
         {
             retval = 
         }
@@ -262,9 +200,23 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
         }
         break;
 
+        case CMD_LOAD_NV_CONFIG:
+        case CMD_SAVE_NV_CONFIG:
+        case CMD_NXP_CHANGE_CONFIG:
+        case CMD_NXP_CHANGE_EAS:
+        case CMD_NXP_EAS_ALARM:
+        case CMD_NXP_READPROTECT:
+        case CMD_NXP_RESET_READPROTECT:
+        case CMD_READ_MODEM_PARA:
+        case CMD_SET_CW:
+        case CMD_SET_MODEM_PARA:
+        case CMD_SET_READER_ENV_MODE:
+        case CMD_INSERT_FHSS_CHANNEL:
+        {
+            retval = PARSER_UNDOCUMENTED_CMD;
+        }
         default:
         {
-            //unknown answer code
             retval = PARSER_UNKNOWN_CMD;
         }
     }

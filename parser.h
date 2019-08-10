@@ -134,9 +134,9 @@ const uint8_t SET_ON = 0xff;//-0x1;
 
 const int PARSER_SUCCESS = 0;
 const int PARSER_MALFORMED_PACKET = 1;
-const int PARSER_UNKNOWN_CMD = 2;
-const int PARSER_UNDOCUMENTED_CMD = 3;
-const int PARSER_LENGTH_ERROR = 4;
+const int PARSER_LENGTH_ERROR = 2;
+const int PARSER_UNKNOWN_CMD = 3;
+const int PARSER_UNDOCUMENTED_CMD = 4;
 const int PARSER_NEEDS_WORK = 37;
 
 #endif //PARSER_H
