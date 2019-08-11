@@ -3,7 +3,7 @@
 
 int parse_frame(uint8_t* frame)
 {
-    int retval = PARSER_NEEDS_WORK;
+    int parser_error = PARSER_NEEDS_WORK;
     uint8_t frame_type = 0;
     uint8_t cmd = 0;
     uint16_t len = 0;
@@ -14,17 +14,17 @@ int parse_frame(uint8_t* frame)
         {
             case FRAME_TYPE_ANS:
             {
-                retval = parse_ans_frame(cmd, len, payload);
+                parser_error = parse_ans_frame(cmd, len, payload);
             }
             break;
             case FRAME_TYPE_CMD:
             {
-                retval = parse_cmd_frame(cmd, len, payload);
+                parser_error = parse_cmd_frame(cmd, len, payload);
             }
             break;
             case FRAME_TYPE_INFO:
             {
-                retval = parse_info_frame(cmd, len, payload);
+                parser_error = parse_info_frame(cmd, len, payload);
             }
             break;
             default:
@@ -36,44 +36,117 @@ int parse_frame(uint8_t* frame)
     }
     else
     {
-        retval = PARSER_MALFORMED_PACKET; //malformed packet
+        parser_error = PARSER_MALFORMED_PACKET; //malformed packet
     }
-    return retval;
+    return parser_error;
 }
 
 int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
 {
-    int retval = PARSER_NEEDS_WORK;
+    int parser_error = PARSER_NEEDS_WORK;
     switch(cmd)
     {
         case CMD_EXE_FAILED:
         {
-            retval = parse_error_frame(len, payload);
+            parser_error = parse_error_frame(len, payload);
         }
         break;
         case CMD_GET_MODULE_INFO:
         {
-            retval = 
+            uint8_t info_type;
+            uint16_t info_len;
+            uint8_t* info;
+            parser_error = ReadGetModuleInfoFrame(len, payload, &info_type, &info_len, &info)
+            if((parser_error == PARSER_SUCCESS) && (cb_module_info))
+            {
+                cb_module_info(info_type, info_len, info);
+            }
         }
         break;
         case CMD_GET_POWER:
         {
-            retval = 
+
+            uint16_t power;
+            parser_error = ReadGetPaPowerFrame(len, payload, &power);
+            if((parser_error == PARSER_SUCCESS) && (cb_get_power))
+            {
+                cb_get_power(power);
+            }
+        }
+        break;
+        case CMD_SET_POWER:
+        {
+            uint8_t error;
+            parser_error = ReadSetPaPowerFrame(len, payload, &error);
+            if((parser_error == PARSER_SUCCESS) && (cb_set_power))
+            {
+                cb_set_power(error);
+            }
         }
         break;
         case CMD_GET_QUERY:
         {
-            retval = 
+            uint8_t dr;
+            uint8_t m;
+            uint8_t trext;
+            uint8_t sel;
+            uint8_t session;
+            uint8_t target;
+            uint8_t q;
+            parser_error = ReadGetQueryFrame(len, payload, &dr, &m, &trext, &sel, &session, &target, &q);
+            if((parser_error == PARSER_SUCCESS) && (cb_get_query))
+            {
+                cb_get_query(dr, m, trext, sel, session, target, q);
+            }
         }
         break;
+        case CMD_SET_QUERY:
+        {
+            uint8_t error;
+            parser_error = ReadSetQueryFrame(len, payload, &error);
+            if((parser_error == PARSER_SUCCESS) && (cb_set_query))
+            {
+                cb_set_query(error);
+            }
+        }
+        break;
+
         case CMD_GET_RF_CHANNEL:
         {
-            retval = 
+            uint8_t channel_index;
+            parser_error = int ReadGetRfChannelFrame(len, payload, &channel_index);
+            if((parser_error == PARSER_SUCCESS) && (cb_get_rf_channel))
+            {
+                cb_get_rf_channel(channel_index);
+            }
+        }
+        break;
+        case CMD_SET_RF_CHANNEL:
+        {
+            uint8_t error;
+            parser_error = ReadSetRfChannelFrame(len, payload, &error);
+            if((parser_error == PARSER_SUCCESS) && (cb_set_rf_channel))
+            {
+                cb_set_rf_channel(error);
+            }
         }
         break;
         case CMD_GET_SELECT_PARA:
         {
-            retval = 
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
+        }
+        break;
+        case CMD_SET_SELECT_PARA:
+        {
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case CMD_INVENTORY:
@@ -84,7 +157,7 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             uint8_t epc_len;
             uint8_t* epc;
             uint16_t crc;
-            retval = ReadTagNotification(len, payload, &rssi, &pc, &epc_len, &epc, &crc);
+            parser_error = ReadTagNotification(len, payload, &rssi, &pc, &epc_len, &epc, &crc);
             //XXX callback
             if(cmd == CMD_INVENTORY)
             {
@@ -99,10 +172,13 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
         case CMD_STOP_MULTI:
         {
             uint8_t param;
-            retval = ReadStopReadFrame(len, payload, &param);
+            parser_error = ReadStopReadFrame(len, payload, &param);
             //XXX callback
             //param should always be zero, docs unclear
-            if(cb_stop_frame) cb_stop_frame(error);
+            if((parser_error == PARSER_SUCCESS) && (cb_io_frame))
+            {
+                cb_stop_frame(error);
+            }
         }
         break;
 
@@ -111,11 +187,14 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             uint8_t pin;
             uint8_t config;
             uint8_t dir;
-            retval = read_io_payload(len, payload, &pin, &config, &dir)
+            parser_error = ReadIoControlFrame(len, payload, &pin, &config, &dir)
             //run callback
             //figure out how to track pin state
             //probably direciton and level as high and low nibbles
-            if(cb_io_frame) cb_io_frame(pin, config, dir);
+            if((parser_error == PARSER_SUCCESS) && (cb_io_frame))
+            {
+                cb_io_frame(pin, config, dir);
+            }
         }
         break;
         case CMD_KILL:
@@ -124,79 +203,106 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             uint8_t pc[2];
             uint8_t epc[64];
             uint8_t error;
-            retval = ReadKillFrame(len, payload, &epc_len, pc, epc, &error);
-            //callback
-            if(cb_kill_frame) cb_kill_frame(epc_len, pc, epc, error);
+            parser_error = ReadKillFrame(len, payload, &epc_len, pc, epc, &error);
+
+            if((parser_error == PARSER_SUCCESS) && (cb_kill))
+            {
+                cb_kill(epc_len, pc, epc, error);
+            }
         }
         break;
         case CMD_LOCK_UNLOCK:
         {
-            retval = 
+            parser_error = ReadLockFrame(uint16_t len, uint8_t* payload, uint8_t *error);
+
         }
         break;
         case CMD_READ_DATA:
         {
-            retval = 
+            uint16_t pc;
+            uint8_t epc_len;
+            uint8_t* epc;
+            uint8_t data_len;
+            uint8_t* data;
+
+            parser_error = ReadReadDataFrame(len, payload, &pc, &epc_len, &epc, &data_len, &data);
+
+            if((parser_error == PARSER_SUCCESS) && (cb_read_data))
+            {
+                cb_read_data(pc, epc_len, epc, data_len, data);
+            }
         }
         break;
         case CMD_RESTART:
         {
-            retval = 
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case CMD_SCAN_JAMMER:
         {
-            retval = 
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case CMD_SCAN_RSSI:
         {
-            retval = 
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case CMD_SET_FHSS:
         {
-            retval = 
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case CMD_SET_INVENTORY_MODE:
         {
-            retval = 
-        }
-        break;
-        case CMD_SET_POWER:
-        {
-            retval = 
-        }
-        break;
-        case CMD_SET_QUERY:
-        {
-            retval = 
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case CMD_SET_REGION:
         {
-            retval = 
-        }
-        break;
-        case CMD_SET_RF_CHANNEL:
-        {
-            retval = 
-        }
-        break;
-        case CMD_SET_SELECT_PARA:
-        {
-            retval = 
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case CMD_SET_SLEEP_TIME:
         {
-            retval = 
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case CMD_WRITE_DATA:
         {
-            retval = 
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
 
@@ -213,11 +319,11 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
         case CMD_SET_READER_ENV_MODE:
         case CMD_INSERT_FHSS_CHANNEL:
         {
-            retval = PARSER_UNDOCUMENTED_CMD;
+            parser_error = PARSER_UNDOCUMENTED_CMD;
         }
         default:
         {
-            retval = PARSER_UNKNOWN_CMD;
+            parser_error = PARSER_UNKNOWN_CMD;
         }
     }
 }
@@ -226,118 +332,200 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
 
 void parse_error_frame(uint16_t len, uint8_t* payload)
 {
+    int parser_error = PARSER_NEEDS_WORK;
     uint8_t error = payload[0];
     switch(error)
     {
         case FAIL_ACCESS_PWD_ERROR:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_CUSTOM_CMD_BASE:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_FHSS_FAIL:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_INVALID_CMD:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_INVALID_PARA:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_INVENTORY_TAG_TIMEOUT:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_KILL_ERROR_CODE_BASE:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_KILL_NO_TAG:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_LOCK_ERROR_CODE_BASE:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_LOCK_NO_TAG:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_NXP_CHANGE_CONFIG_NO_TAG:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_NXP_CHANGE_EAS_NOT_SECURE:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_NXP_CHANGE_EAS_NO_TAG:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_NXP_EAS_ALARM_NO_TAG:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_NXP_READPROTECT_NO_TAG:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_NXP_RESET_READPROTECT_NO_TAG:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_READ_ERROR_CODE_BASE:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_READ_MEMORY_NO_TAG:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_WRITE_ERROR_CODE_BASE:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         case FAIL_WRITE_MEMORY_NO_TAG:
         {
-
+            parser_error = ;
+            if((parser_error == PARSER_SUCCESS) && (cb__))
+            {
+                cb__();
+            }
         }
         break;
         default:
         {
             //unknown error code
-            retval = PARSER_UNKNOWN_CMD;
+            parser_error = PARSER_UNKNOWN_CMD;
         }
     }
 }
 
 int parse_info_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
 {
-    return PARSER_NEEDS_WORK;
+    int parser_error = PARSER_NEEDS_WORK;
+    return parser_error;
 }
