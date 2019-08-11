@@ -59,22 +59,18 @@ int read_success_frame(uint16_t len, uint8_t* payload, uint8_t *error)
     return PARSER_SUCCESS;
 }
 
-int find_frame_begin(size_t *buf_len, uint8_t* *buf)
+void find_frame_begin(size_t *buf_len, uint8_t* *buf)
 {
     while ((*buf_len > 7) && (**buf != FRAME_BEGIN))
     {
         (*buf)++;
         (*buf_len)--;
     }
-    if(*buf_len <= 7)
-    {
-        return PARSER_UNDERFULL;
-    }
-    else
-    {
-        return PARSER_SUCCESS;
-    }
 }
+
+/*
+ *  if the packet does not parse, advance by one byte and try again.
+ */
 void skip_byte(size_t *buf_len, uint8_t* *buf)
 {
     (*buf)++;
@@ -88,6 +84,8 @@ void skip_byte(size_t *buf_len, uint8_t* *buf)
  */
 int read_frame(size_t *buf_len, uint8_t* *buf, uint8_t *frame_type, uint8_t *cmd, uint16_t *len, uint8_t* *payload)
 {
+    find_frame_begin(buf_len, buf);
+
     //extract the packet metadata
     uint8_t* frame = *buf;
 

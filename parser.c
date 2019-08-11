@@ -10,13 +10,15 @@ int parse_packet(size_t *buf_len, uint8_t* *buf)
     uint16_t len = 0;
     uint8_t* payload = NULL;
 
-    parser_error = find_frame_begin(buf_len, buf);
-    if(parser_error != PARSER_SUCCESS)
+    //find the first frame that will parse to the checksum and termination byte
+    while((parser_error != PARSER_SUCCESS) && (parser_error != PARSER_UNDERFULL))
     {
-        return parser_error;
+        parser_error = read_frame(buf_len, buf, &frame_type, &cmd, &len, &payload);
+        if(parser_error != PARSER_SUCCESS) && (parser_error != PARSER_UNDERFULL))
+        {
+            skip_byte(buf_len, buf);
+        }
     }
-
-    parser_error = read_frame(buf_len, buf, &frame_type, &cmd, &len, &payload);
     if(parser_error != PARSER_SUCCESS)
     {
         return parser_error;
