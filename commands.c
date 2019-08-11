@@ -115,20 +115,16 @@ uint8_t* BuildGetModuleInfoFrame(uint8_t* buf, uint8_t field)
     uint16_t len = 1;
     return build_cmd_frame(buf, cmd, len, field);
 }
-//XXX fetch
-uint8_t* BuildGetPaPowerFrame(uint8_t* buf)
+int ReadGetModuleInfoFrame(uint16_t len, uint8_t* payload, uint8_t *info_type, uint16_t *info_len, uint8_t* *info)
 {
-    return build_cmd_empty_frame(buf, CMD_GET_POWER);
-}
-int ReadGetPaPowerFrame(uint16_t len, uint8_t* payload, uint16_t *power)
-{
-    if(len != 2)
-    {
-        return PARSER_LENGTH_ERROR;
-    }
-    *power = (payload[0]<<8) + payload[1];
+    *info_type = payload[0];
+    *info_len = len - 1;
+    *info = &payload[1];
     return PARSER_SUCCESS;
 }
+
+
+
 
 
 uint8_t* BuildGetRfChannelFrame(uint8_t* buf)
@@ -278,7 +274,7 @@ uint8_t* BuildIoControlFrame(uint8_t* buf, uint8_t* io_payload)
     return build_cmd_frame(buf, cmd, len, uint8_t* io_payload);
 }
 
-int read_io_payload(uint16_t len, uint8_t* payload, uint8_t* pin, uint8_t* config, uint8_t* dir)
+int ReadIoControlFrame(uint16_t len, uint8_t* payload, uint8_t* pin, uint8_t* config, uint8_t* dir)
 {
     if(len != 3)
     {
@@ -380,6 +376,20 @@ uint8_t* BuildSetModuleSleepFrame(uint8_t* buf)
 }
 //no return message
 
+uint8_t* BuildGetPaPowerFrame(uint8_t* buf)
+{
+    return build_cmd_empty_frame(buf, CMD_GET_POWER);
+}
+int ReadGetPaPowerFrame(uint16_t len, uint8_t* payload, uint16_t *power)
+{
+    if(len != 2)
+    {
+        return PARSER_LENGTH_ERROR;
+    }
+    *power = (payload[0]<<8) + payload[1];
+    return PARSER_SUCCESS;
+}
+
 uint8_t* BuildSetPaPowerFrame(uint8_t* buf, float powerDBm)
 {
     uint8_t cmd = CMD_SET_POWER;
@@ -454,7 +464,6 @@ uint8_t* BuildReadDataFrame(uint8_t* buf, uint8_t* password, uint8_t bank, uint3
     
     return build_cmd_frame(buf, cmd, len, payload);
 }
-uint8_t* BuildWriteDataFrame(uint8_t* buf, uint8_t* password, uint8_t bank, uint32_t data_ptr, uint32_t data_len, uint8_t* data);
 
 int ReadReadDataFrame(uint16_t len, uint8_t* payload, uint16_t *pc, uint8_t *epc_len, uint8_t* *epc, uint8_t *data_len, uint8_t* *data)
 {
