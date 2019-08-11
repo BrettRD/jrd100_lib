@@ -59,42 +59,80 @@ int read_success_frame(uint16_t len, uint8_t* payload, uint8_t *error)
     return PARSER_SUCCESS;
 }
 
+int find_frame_begin(size_t *buf_len, uint8_t* *buf)
+{
+    while ((*buf_len > 7) && (**buf != FRAME_BEGIN))
+    {
+        (*buf)++;
+        (*buf_len)--;
+    }
+    if(*buf_len <= 7)
+    {
+        return PARSER_UNDERFULL;
+    }
+    else
+    {
+        return PARSER_SUCCESS;
+    }
+}
+void skip_byte(size_t *buf_len, uint8_t* *buf)
+{
+    (*buf)++;
+    (*buf_len)--;
+}
+
+
 /*
  * reads data from a frame into pointers
  * returns the payload pointer into the frame buffer, or null if the frame is malformed
  */
-uint8_t* read_frame(uint8_t* frame, uint8_t *frame_type, uint8_t *cmd, uint16_t *len)
+int read_frame(size_t *buf_len, uint8_t* *buf, uint8_t *frame_type, uint8_t *cmd, uint16_t *len, uint8_t* *payload)
 {
-    uint8_t frame_header = frame[0];
-    *frame_type = frame[1];
-    *cmd = frame[2];
-    *len = (frame[3] << 8) + frame[4];
-    uint8_t* payload = frame[5];
-    uint8_t received_cs = payload[5 + *len];
-    uint8_t frame_terminator = frame[6 + *len];
-    uint8_t expected_cs = calc_frame_checksum(frame, *len);
+    //extract the packet metadata
+    uint8_t* frame = *buf;
 
-    if(frame_header == FRAME_BEGIN)
+    uint8_t frame_header = frame[0];
+    uint16_t payload_len = (frame[3] << 8) + frame[4];
+
+    uint8_t received_cs = payload[5 + payload_len];
+    uint8_t expected_cs = calc_frame_checksum(frame, payload_len);
+
+    uint8_t frame_terminator = frame[6 + payload_len];
+
+    //check the packet
+    if(*buf_len < (7 + payload_len)
     {
-        if(expected_cs == received_cs)
-        {
-            if(frame_terminator == FRAME_END)
-            {
-                return payload;
-            }
-        }
+        return PARSER_UNDERFULL;
+    }
+    if(frame_header != FRAME_BEGIN)
+    {
+        return PARSER_MALFORMED_HEADER;
+    }
+    if(expected_cs != received_cs)
+    {
+        return PARSER_CHECKSUM_ERROR;
+    }
+    if(frame_terminator != FRAME_END)
+    {
+        return PARSER_MALFORMED_TERMINATOR
     }
 
-    //no access to failed frames
-    *frame_type = 0;
-    *cmd = 0;
-    *len = 0;
-    *payload = NULL;
-    return payload;
+    //load the return values
+    *frame_type = frame[1];
+    *cmd = frame[2];
+    *len = payload_len;
+    *payload = &frame[5];
+
+    //advance the buffer to the next frame
+    *buf = &frame[7 + payload_len];
+    *buf_len = *buf_len - (7 + payload_len);
+
+    return PARSER_SUCCESS;
 }
 
 /*
  * calculates the checksum, assumes that the first byte is the FRAME_BEGIN header byte
+ * len is the payload length as written in the paylaod.  Not including type, command, and len bytes (4 extra bytes for cs)
  */
 uint8_t calc_frame_checksum(uint8_t* frame, len)
 {
@@ -115,6 +153,7 @@ uint8_t* BuildGetModuleInfoFrame(uint8_t* buf, uint8_t field)
     uint16_t len = 1;
     return build_cmd_frame(buf, cmd, len, field);
 }
+
 int ReadGetModuleInfoFrame(uint16_t len, uint8_t* payload, uint8_t *info_type, uint16_t *info_len, uint8_t* *info)
 {
     *info_type = payload[0];
@@ -123,14 +162,11 @@ int ReadGetModuleInfoFrame(uint16_t len, uint8_t* payload, uint8_t *info_type, u
     return PARSER_SUCCESS;
 }
 
-
-
-
-
 uint8_t* BuildGetRfChannelFrame(uint8_t* buf)
 {
     return build_cmd_empty_frame(buf, CMD_GET_RF_CHANNEL);
 }
+
 int ReadGetRfChannelFrame(uint16_t len, uint8_t* payload, uint8_t *channel_index)
 {
     if(len != 1)
@@ -140,10 +176,7 @@ int ReadGetRfChannelFrame(uint16_t len, uint8_t* payload, uint8_t *channel_index
     *channel_index = payload[0];
     return PARSER_SUCCESS;
 }
-float channel_freq_MHz(uint8_t region_index, uint8_t channel_index)
-{
-    return REGION_FREQ_STARTS[region_index] + (channel_index * REGION_FREQ_SEPARATIONS[region_index]);
-}
+
 uint8_t* BuildSetRfChannelFrame(uint8_t* buf, uint8_t channel_index)
 {
     uint8_t cmd = CMD_SET_RF_CHANNEL;
@@ -160,7 +193,7 @@ uint8_t* BuildGetSelectFrame(uint8_t* buf, )
 {
     return build_cmd_frame(buf, CMD_GET_SELECT_PARA);
 }
-int ReadGetSelectFrame(uint16_t len, uint8_t* payload, uint8_t* target, uint8_t action, uint8_t bank, uint32_t pointer, uint8_t mask_len, uint8_t** mask, bool truncate)
+int ReadGetSelectFrame(uint16_t len, uint8_t* payload, uint8_t *target, uint8_t *action, uint8_t *bank, uint32_t *pointer, uint8_t *mask_len, uint8_t* *mask, bool *truncate)
 {
     uint8_t mask_len_bytes = payload[5]/8;
     if(mask_len_bytes + 7 != len)
@@ -185,6 +218,11 @@ int ReadGetSelectFrame(uint16_t len, uint8_t* payload, uint8_t* target, uint8_t 
 
     return PARSER_SUCCESS;
 }
+float channel_freq_MHz(uint8_t region_index, uint8_t channel_index)
+{
+    return REGION_FREQ_STARTS[region_index] + (channel_index * REGION_FREQ_SEPARATIONS[region_index]);
+}
+
 
 //XXX needs completion with EPC documentation
 uint8_t* BuildSetSelectFrame(uint8_t* buf, uint8_t target, uint8_t action, uint8_t bank, uint32_t pointer, uint8_t mask_len_bits, uint8_t* mask, bool truncate)
@@ -193,42 +231,38 @@ uint8_t* BuildSetSelectFrame(uint8_t* buf, uint8_t target, uint8_t action, uint8
     uint8_t mask_len_bytes = mask_len/8;
     uint16_t len = 7 + mask_len_bytes;
     uint8_t select_byte = ((target &0x7)<<5) | ((action &0x7)<<2) | (bank &0x3);
+    uint8_t* payload = buf;
 
     //move the mask first so memory can overlap
+    memmove(&payload[7], mask, mask_len_bytes);
 
-    memmove(&buf[7], mask, mask_len_bytes);
+    payload[0] = select_byte;
 
-    buf[0] = select_byte;
-
-    buf[1] = (pointer>>24) & 0xff;
-    buf[2] = (pointer>>16) & 0xff;
-    buf[3] = (pointer>> 8) & 0xff;
-    buf[4] = (pointer>> 0) & 0xff;
+    payload[1] = (pointer>>24) & 0xff;
+    payload[2] = (pointer>>16) & 0xff;
+    payload[3] = (pointer>> 8) & 0xff;
+    payload[4] = (pointer>> 0) & 0xff;
     
-    buf[5] = mask_len_bits; //mask length in bits
+    payload[5] = mask_len_bits; //mask length in bits
 
     if(truncate)
     {
-        buf[6] = 0x80;
+        payload[6] = 0x80;
     }
     else
     {
-        buf[6] = 0x00;
+        payload[6] = 0x00;
     }
-    
-    //mask starts at buf[7]
 
-    return build_cmd_frame(buf, cmd, len, buf);
+    //mask starts at payload[7]
+
+    return build_cmd_frame(buf, cmd, len, payload);
 }
 
 int ReadSetSelectFrame(uint16_t len, uint8_t* payload, uint8_t *error)
 {
     return read_success_frame(len, payload, error);
 }
-
-
-
-
 
 uint8_t* build_io_payload(uint8_t* payload, uint8_t pin, uint8_t config, uint8_t dir)
 {
@@ -247,22 +281,18 @@ uint8_t* build_io_payload(uint8_t* payload, uint8_t pin, uint8_t config, uint8_t
         return NULL;
     }
 
-    //check the config makes sense
-
-
-    //check the pin is in range
-    if((pin == 0) || (pin > 4))
+    //pins are 1 indexed
+    if((pin < 1) || (pin > 4))
     {
         return NULL;
     }
-
-    //check the config makes sense
 
     payload[0] = config;
     payload[1] = pin;
     payload[2] = dir;
     return payload;
 }
+
 uint8_t* BuildIoControlFrame(uint8_t* buf, uint8_t* io_payload)
 {
     if(io_payload == NULL)
@@ -286,7 +316,6 @@ int ReadIoControlFrame(uint16_t len, uint8_t* payload, uint8_t* pin, uint8_t* co
     return PARSER_SUCCESS;
 }
 
-
 /*
  *  read at most tag_count tags
  */
@@ -294,6 +323,7 @@ uint8_t* BuildReadSingleFrame(uint8_t* buf)
 {
     return build_cmd_empty_frame(buf, CMD_INVENTORY);
 }
+
 //use ReadTagNotification for both
 /*
  *  read at most tag_count tags
@@ -309,7 +339,6 @@ uint8_t* BuildReadMultiFrame(uint8_t* buf, uint16_t tag_count)
 
     return build_cmd_frame(buf, cmd, len, payload);
 }
-
 
 int ReadTagNotification(uint16_t len, uint8_t *payload, uint8_t *rssi, uint16_t *pc, uint8_t *epc_len, uint8_t* *epc, uint16_t *crc)
 {
@@ -329,18 +358,10 @@ uint8_t* BuildStopReadFrame(uint8_t* buf)
 {
     return build_cmd_empty_frame(buf, CMD_STOP_MULTI);
 }
+
 int ReadStopReadFrame(uint16_t len, uint8_t* payload, uint8_t *error)
 {
     return read_success_frame(len, payload, error);
-}
-
-uint8_t* BuildKillFrame(uint8_t* buf, uint8_t* password)
-{
-    return build_cmd_frame(buf, CMD_KILL, 4, password);
-}
-int ReadKillFrame(uint16_t len, uint8_t* payload, uint8_t *epc_len, uint16_t *pc, uint8_t* *epc, uint8_t *error)
-{
-    return read_tag_sucess_frame(len, payload, pc, epc_len, epc, error);
 }
 
 //baud is baud rate in hz.
@@ -380,6 +401,7 @@ uint8_t* BuildGetPaPowerFrame(uint8_t* buf)
 {
     return build_cmd_empty_frame(buf, CMD_GET_POWER);
 }
+
 int ReadGetPaPowerFrame(uint16_t len, uint8_t* payload, uint16_t *power)
 {
     if(len != 2)
@@ -404,7 +426,6 @@ int ReadSetPaPowerFrame(uint16_t len, uint8_t* payload, uint8_t *error)
     return read_success_frame(len, payload, error);
 }
 
-
 uint8_t *BuildSetRegionFrame(uint8_t* buf, uint8_t region_code)
 {
     uint8_t cmd = CMD_SET_REGION;
@@ -417,35 +438,6 @@ int ReadSetRegionFrame(uint16_t len, uint8_t* payload, uint8_t *error)
 }
 
 
-
-uint8_t* BuildWriteDataFrame(uint8_t* buf, uint8_t* password, uint8_t bank, uint32_t data_ptr, uint32_t data_len, uint8_t* data);
-{
-    uint8_t cmd = CMD_WRITE_DATA;
-    uint16_t len = 9 + data_len;
-    uint8_t* payload = buf;  //moved to correct frame position by build_cmd_frame
-    uint8_t data_len_words = data_len/2;
-    uint8_t data_ptr_words = data_ptr/2;
-
-    //data and password may overlap with buf
-    uint8_t pwd[4];
-    memcpy(pwd, password, 4); 
-    memmove(payload[9], data, data_len);
-    memcpy(payload, pwd, 4);
-
-    payload[4] = bank;
-    payload[5] = (data_ptr_words >> 8) & 0xff;
-    payload[6] = (data_ptr_words >> 0) & 0xff;
-    payload[7] = (data_len_words >> 8) & 0xff;
-    payload[8] = (data_len_words >> 0) & 0xff;
-    
-    return build_cmd_frame(buf, cmd, len, payload);
-}
-int ReadWriteDataFrame(uint16_t len, uint8_t* payload, uint16_t *pc, uint8_t *epc_len, uint8_t* *epc, uint8_t *error)
-{
-    return read_tag_sucess_frame(len, payload, pc, epc_len, epc, error);
-}
-
-
 uint8_t* BuildReadDataFrame(uint8_t* buf, uint8_t* password, uint8_t bank, uint32_t data_ptr, uint32_t data_len)
 {
     uint8_t cmd = CMD_READ_DATA;
@@ -455,13 +447,12 @@ uint8_t* BuildReadDataFrame(uint8_t* buf, uint8_t* password, uint8_t bank, uint3
 
     uint8_t* payload = buf; //moved to correct frame position by build_cmd_frame
 
-    memmove(payload, password, 4);
+    memmove(&payload[0], password, 4);
     payload[4] = bank;
     payload[5] = (data_ptr_words >> 8) & 0xff;
     payload[6] = (data_ptr_words) & 0xff;
     payload[7] = (data_len_words >> 8) & 0xff;
     payload[8] = (data_len_words) & 0xff;
-    
     return build_cmd_frame(buf, cmd, len, payload);
 }
 
@@ -483,6 +474,34 @@ int ReadReadDataFrame(uint16_t len, uint8_t* payload, uint16_t *pc, uint8_t *epc
 
     return PARSER_SUCCESS;
 }
+
+uint8_t* BuildWriteDataFrame(uint8_t* buf, uint8_t* password, uint8_t bank, uint32_t data_ptr, uint32_t data_len, uint8_t* data);
+{
+    uint8_t cmd = CMD_WRITE_DATA;
+    uint16_t len = 9 + data_len;
+    uint8_t* payload = buf;  //moved to correct frame position by build_cmd_frame
+    uint8_t data_len_words = data_len/2;
+    uint8_t data_ptr_words = data_ptr/2;
+
+    //data and password may overlap with buf
+    uint8_t pwd[4];
+    memcpy(pwd, password, 4);
+    memmove(&payload[9], data, data_len);
+    memcpy(payload, pwd, 4);
+    payload[4] = bank;
+    payload[5] = (data_ptr_words >> 8) & 0xff;
+    payload[6] = (data_ptr_words >> 0) & 0xff;
+    payload[7] = (data_len_words >> 8) & 0xff;
+    payload[8] = (data_len_words >> 0) & 0xff;
+
+    return build_cmd_frame(buf, cmd, len, payload);
+}
+
+int ReadWriteDataFrame(uint16_t len, uint8_t* payload, uint16_t *pc, uint8_t *epc_len, uint8_t* *epc, uint8_t *error)
+{
+    return read_tag_sucess_frame(len, payload, pc, epc_len, epc, error);
+}
+
 uint8_t* BuildLockFrame(uint8_t* buf, uint8_t* password, uint8_t* lock_payload)
 {
     uint8_t cmd = CMD_LOCK_UNLOCK;
@@ -497,10 +516,21 @@ uint8_t* BuildLockFrame(uint8_t* buf, uint8_t* password, uint8_t* lock_payload)
 
     return build_cmd_frame(buf, cmd, len, payload);
 }
-int ReadLockFrame(uint16_t len, uint8_t* payload, uint8_t *error)
+int ReadLockFrame(uint16_t len, uint8_t* payload, uint16_t *pc, uint8_t *epc_len, uint8_t* *epc, uint8_t *error)
 {
     return read_tag_sucess_frame(len, payload, pc, epc_len, epc, error);
 }
+
+uint8_t* BuildKillFrame(uint8_t* buf, uint8_t* password)
+{
+    return build_cmd_frame(buf, CMD_KILL, 4, password);
+}
+int ReadKillFrame(uint16_t len, uint8_t* payload, uint16_t *pc, uint8_t *epc_len, uint8_t* *epc, uint8_t *error)
+{
+    return read_tag_sucess_frame(len, payload, pc, epc_len, epc, error);
+}
+
+
 uint8_t* BuildScanJammerFrame(uint8_t* buf)
 {
     return build_cmd_empty_frame(buf, CMD_SCAN_JAMMER);
@@ -544,6 +574,27 @@ int ReadSetInventoryModeFrame(uint16_t len, uint8_t* payload, uint8_t *error)
     return read_success_frame(len, payload, error);
 }
 
+uint8_t* BuildGetQueryFrame(uint8_t* buf)
+{
+    return build_cmd_empty_frame(buf, CMD_GET_QUERY);
+}
+int ReadGetQueryFrame(uint16_t len, uint8_t* payload, uint8_t *dr, uint8_t *m, uint8_t *trext, uint8_t *sel, uint8_t *session, uint8_t *target, uint8_t *q)
+{
+    if(len!=2)
+    {
+        return PARSER_LENGTH_ERROR;
+    }
+    uint16_t bitmap = payload[1]<<8 + payload[0];
+    *dr      = (bitmap >> 15) & 0x01;
+    *m       = (bitmap >> 13) & 0x03;
+    *trext   = (bitmap >> 12) & 0x01;
+    *sel     = (bitmap >> 10) & 0x03;
+    *session = (bitmap >>  8) & 0x03;
+    *target  = (bitmap >>  7) & 0x01;
+    *Q       = (bitmap >>  3) & 0x0F;
+
+    return PARSER_SUCCESS;
+}
 
 
 uint8_t* BuildSetQueryFrame(uint8_t* buf, uint8_t dr, uint8_t m, uint8_t trext, uint8_t set, uint8_t session, uint8_t target, uint8_t q)
@@ -572,27 +623,24 @@ int ReadSetQueryFrame(uint16_t len, uint8_t* payload, uint8_t *error)
     return read_success_frame(len, payload, error);
 }
 
-
-
-uint8_t* BuildGetQueryFrame(uint8_t* buf)
+/*
+ * set the auto-sleep timeout
+ * zero never sleeps
+ */
+uint8_t* BuildSetSleepTimeFrame(uint8_t* buf, uint8_t idle_minutes)
 {
-    return build_cmd_empty_frame(buf, CMD_GET_QUERY);
+    uint8_t cmd = CMD_SET_SLEEP_TIME;
+    uint16_t len = 1;
+    return build_cmd_frame(buf, cmd, len, &idle_minutes);
 }
-int ReadGetQueryFrame(uint16_t len, uint8_t* payload, uint8_t *dr, uint8_t *m, uint8_t *trext, uint8_t *sel, uint8_t *session, uint8_t *target, uint8_t *q)
+
+int ReadSetSleepTimeFrame(uint16_t len, uint8_t* payload, uint8_t *idle_minutes)
 {
-    if(len!=2)
+    if(len != 1)
     {
         return PARSER_LENGTH_ERROR;
     }
-    uint16_t bitmap = payload[1]<<8 + payload[0];
-    *dr      = (bitmap >> 15) & 0x01;
-    *m       = (bitmap >> 13) & 0x03;
-    *trext   = (bitmap >> 12) & 0x01;
-    *sel     = (bitmap >> 10) & 0x03;
-    *session = (bitmap >>  8) & 0x03;
-    *target  = (bitmap >>  7) & 0x01;
-    *Q       = (bitmap >>  3) & 0x0F;
-
+    *idle_minutes = payload[0];
     return PARSER_SUCCESS;
 }
 

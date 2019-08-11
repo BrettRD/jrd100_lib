@@ -1,43 +1,60 @@
 #include "parser.h"
 #include "commands.h"
 
-int parse_frame(uint8_t* frame)
+int parse_packet(size_t *buf_len, uint8_t* *buf)
 {
     int parser_error = PARSER_NEEDS_WORK;
+
     uint8_t frame_type = 0;
     uint8_t cmd = 0;
     uint16_t len = 0;
-    uint8_t* payload = read_frame(uint8_t* frame, &frame_type, &cmd, &len);
-    if(payload)
+    uint8_t* payload = NULL;
+
+    parser_error = find_frame_begin(buf_len, buf);
+    if(parser_error != PARSER_SUCCESS)
     {
-        switch(frame_type)
+        return parser_error;
+    }
+
+    parser_error = read_frame(buf_len, buf, &frame_type, &cmd, &len, &payload);
+    if(parser_error != PARSER_SUCCESS)
+    {
+        return parser_error;
+    }
+
+    parser_error = parse_frame(frame_type, cmd, len, payload);
+
+    return parser_error;
+}
+
+
+int parse_frame(uint8_t frame_type uint8_t cmd, uint16_t len, uint8_t* payload)
+{
+    int parser_error = PARSER_NEEDS_WORK;
+    switch(frame_type)
+    {
+        case FRAME_TYPE_ANS:
         {
-            case FRAME_TYPE_ANS:
-            {
-                parser_error = parse_ans_frame(cmd, len, payload);
-            }
-            break;
-            case FRAME_TYPE_CMD:
-            {
-                parser_error = parse_cmd_frame(cmd, len, payload);
-            }
-            break;
-            case FRAME_TYPE_INFO:
-            {
-                parser_error = parse_info_frame(cmd, len, payload);
-            }
-            break;
-            default:
-            {
-                //unknown frame type
-            }
-            break;
+            parser_error = parse_ans_frame(cmd, len, payload);
         }
+        break;
+        case FRAME_TYPE_CMD:
+        {
+            parser_error = parse_cmd_frame(cmd, len, payload);
+        }
+        break;
+        case FRAME_TYPE_INFO:
+        {
+            parser_error = parse_info_frame(cmd, len, payload);
+        }
+        break;
+        default:
+        {
+            //unknown frame type
+        }
+        break;
     }
-    else
-    {
-        parser_error = PARSER_MALFORMED_PACKET; //malformed packet
-    }
+
     return parser_error;
 }
 
@@ -133,19 +150,27 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
         break;
         case CMD_GET_SELECT_PARA:
         {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            uint8_t target;
+            uint8_t action;
+            uint8_t bank;
+            uint32_t pointer;
+            uint8_t mask_len;
+            uint8_t* mask;
+            bool truncate;
+            parser_error = ReadGetSelectFrame(len, payload, &target, &action, &bank, &pointer, &mask_len, &mask, &truncate);
+            if((parser_error == PARSER_SUCCESS) && (cb_get_select))
             {
-                cb__();
+                cb_get_select(target, action, bank, pointer, mask_len, mask, truncate);
             }
         }
         break;
         case CMD_SET_SELECT_PARA:
         {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            uint8_t error;
+            parser_error = ReadSetSelectFrame(len, payload, &error);
+            if((parser_error == PARSER_SUCCESS) && (cb_set_Select))
             {
-                cb__();
+                cb_set_Select(error);
             }
         }
         break;
@@ -188,7 +213,6 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             uint8_t config;
             uint8_t dir;
             parser_error = ReadIoControlFrame(len, payload, &pin, &config, &dir)
-            //run callback
             //figure out how to track pin state
             //probably direciton and level as high and low nibbles
             if((parser_error == PARSER_SUCCESS) && (cb_io_frame))
@@ -197,14 +221,41 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             }
         }
         break;
+
+        case CMD_READ_DATA:
+        {
+            uint16_t pc;
+            uint8_t epc_len;
+            uint8_t* epc;
+            uint8_t data_len;
+            uint8_t* data;
+            parser_error = ReadReadDataFrame(len, payload, &pc, &epc_len, &epc, &data_len, &data);
+            if((parser_error == PARSER_SUCCESS) && (cb_read_data))
+            {
+                cb_read_data(pc, epc_len, epc, data_len, data);
+            }
+        }
+        break;
+        case CMD_WRITE_DATA:
+        {
+            uint8_t epc_len;
+            uint16_t pc;
+            uint8_t* epc;
+            uint8_t error;
+            parser_error = ReadWriteDataFrame(len, payload, &pc, &epc_len, &epc, &error);
+            if((parser_error == PARSER_SUCCESS) && (cb_write_data))
+            {
+                cb_write_data(epc_len, pc, epc, error);
+            }
+        }
+        break;
         case CMD_KILL:
         {
             uint8_t epc_len;
-            uint8_t pc[2];
-            uint8_t epc[64];
+            uint16_t pc;
+            uint8_t* epc;
             uint8_t error;
-            parser_error = ReadKillFrame(len, payload, &epc_len, pc, epc, &error);
-
+            parser_error = ReadKillFrame(len, payload, &pc, &epc_len, &epc, &error);
             if((parser_error == PARSER_SUCCESS) && (cb_kill))
             {
                 cb_kill(epc_len, pc, epc, error);
@@ -213,99 +264,83 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
         break;
         case CMD_LOCK_UNLOCK:
         {
-            parser_error = ReadLockFrame(uint16_t len, uint8_t* payload, uint8_t *error);
-
-        }
-        break;
-        case CMD_READ_DATA:
-        {
-            uint16_t pc;
             uint8_t epc_len;
+            uint16_t pc;
             uint8_t* epc;
-            uint8_t data_len;
-            uint8_t* data;
-
-            parser_error = ReadReadDataFrame(len, payload, &pc, &epc_len, &epc, &data_len, &data);
-
-            if((parser_error == PARSER_SUCCESS) && (cb_read_data))
+            uint8_t error;
+            parser_error = ReadLockFrame(len, payload, &pc, &epc_len, &epc, &error);
+            if((parser_error == PARSER_SUCCESS) && (cb_lock))
             {
-                cb_read_data(pc, epc_len, epc, data_len, data);
-            }
-        }
-        break;
-        case CMD_RESTART:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
-            {
-                cb__();
+                cb_lock(epc_len, pc, epc, error);
             }
         }
         break;
         case CMD_SCAN_JAMMER:
         {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            uint8_t ch_start;
+            uint8_t ch_end;
+            uint8_t* channel_noise;
+            parser_error = ReadScanJammerFrame(len, payload, &ch_start, &ch_end, &channel_noise);
+            if((parser_error == PARSER_SUCCESS) && (cb_scan_jammer))
             {
-                cb__();
+                cb_scan_jammer(ch_start, ch_end, channel_noise);
             }
         }
         break;
         case CMD_SCAN_RSSI:
         {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            uint8_t ch_start;
+            uint8_t ch_end;
+            uint8_t* channel_rssi;
+            parser_error = ReadScanRssiFrame(len, payload, &ch_start, &ch_end, &channel_rssi);
+            if((parser_error == PARSER_SUCCESS) && (cb_scan_rssi))
             {
-                cb__();
+                cb_scan_rssi(ch_start, ch_end, channel_rssi);
             }
         }
         break;
         case CMD_SET_FHSS:
         {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            uint8_t error;
+            parser_error = ReadSetFhssFrame(len, payload, &error);
+            if((parser_error == PARSER_SUCCESS) && (cb_set_fhss))
             {
-                cb__();
+                cb_set_fhss(error);
             }
         }
         break;
         case CMD_SET_INVENTORY_MODE:
         {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            uint8_t error;
+            parser_error = ReadSetInventoryModeFrame(len, payload, &error);
+            if((parser_error == PARSER_SUCCESS) && (cb_set_inventory_mode))
             {
-                cb__();
+                cb_set_inventory_mode(error);
             }
         }
         break;
         case CMD_SET_REGION:
         {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            uint8_t error;
+            parser_error = ReadSetRegionFrame(len, payload, &error);
+            if((parser_error == PARSER_SUCCESS) && (cb_set_region))
             {
-                cb__();
+                cb_set_region(error);
             }
         }
         break;
         case CMD_SET_SLEEP_TIME:
         {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            uint8_t idle_minutes;
+            parser_error = ReadSetSleepTimeFrame(len, payload, &idle_minutes);
+            if((parser_error == PARSER_SUCCESS) && (cb_set_sleep_time))
             {
-                cb__();
-            }
-        }
-        break;
-        case CMD_WRITE_DATA:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
-            {
-                cb__();
+                cb_set_sleep_time(idle_minutes);
             }
         }
         break;
 
+        case CMD_RESTART:
         case CMD_LOAD_NV_CONFIG:
         case CMD_SAVE_NV_CONFIG:
         case CMD_NXP_CHANGE_CONFIG:
