@@ -37,28 +37,36 @@ bool step_sequence_tx()
                 write(port_fd, frame, len);
             break;
             case 1:
-                BuildGetModuleInfoFrame(&len, write_buffer, MODULE_SOFTWARE_VERSION_FIELD);
+                frame = BuildGetModuleInfoFrame(&len, write_buffer, MODULE_SOFTWARE_VERSION_FIELD);
                 write(port_fd, frame, len);
             break;
             case 2:
-                BuildGetModuleInfoFrame(&len, write_buffer, MODULE_MANUFACTURE_INFO_FIELD);
+                frame = BuildGetModuleInfoFrame(&len, write_buffer, MODULE_MANUFACTURE_INFO_FIELD);
                 write(port_fd, frame, len);
             break;
             case 3:
-                BuildReadSingleFrame(&len, write_buffer);
+                frame = BuildScanJammerFrame(&len, write_buffer);
+                write(port_fd, frame, len);
+            break;
+            case 4:
+                frame = BuildScanRssiFrame(&len, write_buffer);
+                write(port_fd, frame, len);
+            break;
+            case 5:
+                frame = BuildReadSingleFrame(&len, write_buffer);
                 write(port_fd, frame, len);
             break;
             default:
                 return false;
         }
 
-
         seq_step++;
         seq_tx = false;
     }
     return true;
 }
-void step_Sequence_rx()
+
+void step_sequence_rx()
 {
     if(!seq_tx)
     {
@@ -74,27 +82,54 @@ void print_module_info(uint8_t info_type, uint16_t info_len, uint8_t* info)
     {
         case MODULE_HARDWARE_VERSION_FIELD:
         {
-            printf("Hardware version: %s", info);
+            printf("Hardware version: %s\n", info);
         }
         break;
         case MODULE_MANUFACTURE_INFO_FIELD:
         {
-            printf("Manufaturer version: %s", info);
+            printf("Manufaturer version: %s\n", info);
         }
         break;
         case MODULE_SOFTWARE_VERSION_FIELD:
         {
-            printf("Software version: %s", info);
+            printf("Software version: %s\n", info);
         }
         break;
     }
-    step_Sequence_rx();
+    step_sequence_rx();
 }
 
+void print_noise_scan(uint8_t ch_start, uint8_t ch_end, uint8_t* channel_noise)
+{
+    printf("Noise scan:\n");
+    for(int i=ch_start; i<ch_end; i++)
+    {
+        printf("channel %d: %d", i, channel_noise[i - ch_start]);
+    }
+    step_sequence_rx();
+}
+void print_rssi_scan(uint8_t ch_start, uint8_t ch_end, uint8_t* channel_rssi)
+{
+    printf("RSSI scan:\n");
+    for(int i=ch_start; i<ch_end; i++)
+    {
+        printf("channel %d: %d", i, channel_rssi[i - ch_start]);
+    }
+    step_sequence_rx();
+}
 
-
-
-
+void print_discovered_tag(uint8_t rssi, uint16_t pc, uint8_t epc_len, uint8_t* epc, uint16_t crc)
+{
+    printf("Found tag\n    epc = ");
+    for(int i=0; i<epc_len; i++)
+    {
+        printf("%c%c",
+                "0123456789abcdef"[epc[epc_len-1-i]>>4],
+                "0123456789abcdef"[epc[epc_len-1-i]&0xf]);
+    }
+    printf("\n    rssi = %d\n", rssi);
+    step_sequence_rx();
+}
 
 
 
@@ -106,7 +141,9 @@ int main()
 
 
     cb_module_info = print_module_info;
-
+    cb_scan_jammer = print_noise_scan;
+    cb_scan_rssi = print_rssi_scan;
+    cb_tag_single_notification = print_discovered_tag;
 
     port_fd = open(port_path, O_RDWR | O_NOCTTY);
 
