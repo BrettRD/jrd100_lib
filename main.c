@@ -12,6 +12,61 @@
 
 
 
+
+//serial port and write buffer
+int port_fd = -1;
+uint8_t write_buffer[BUFSIZ];
+
+//crappy state machine to go through the motions
+int seq_step = 0;
+bool seq_tx = false;
+
+
+//return false when finished
+bool step_sequence_tx()
+{
+
+    size_t len = BUFSIZ;
+    uint8_t *frame = write_buffer;
+    if(seq_tx)
+    {
+        switch(seq_step)
+        {
+            case 0:
+                frame = BuildGetModuleInfoFrame(&len, write_buffer, MODULE_HARDWARE_VERSION_FIELD);
+                write(port_fd, frame, len);
+            break;
+            case 1:
+                BuildGetModuleInfoFrame(&len, write_buffer, MODULE_SOFTWARE_VERSION_FIELD);
+                write(port_fd, frame, len);
+            break;
+            case 2:
+                BuildGetModuleInfoFrame(&len, write_buffer, MODULE_MANUFACTURE_INFO_FIELD);
+                write(port_fd, frame, len);
+            break;
+            case 3:
+                BuildReadSingleFrame(&len, write_buffer);
+                write(port_fd, frame, len);
+            break;
+            default:
+                return false;
+        }
+
+
+        seq_step++;
+        seq_tx = false;
+    }
+    return true;
+}
+void step_Sequence_rx()
+{
+    if(!seq_tx)
+    {
+        seq_tx = true;
+    }
+}
+
+
 void print_module_info(uint8_t info_type, uint16_t info_len, uint8_t* info)
 {
     info[info_len] = '\0';  //This edits the read buffer, but we're already finished with that data.
@@ -33,7 +88,14 @@ void print_module_info(uint8_t info_type, uint16_t info_len, uint8_t* info)
         }
         break;
     }
+    step_Sequence_rx();
 }
+
+
+
+
+
+
 
 
 
@@ -46,7 +108,7 @@ int main()
     cb_module_info = print_module_info;
 
 
-    int port_fd = open(port_path, O_RDWR | O_NOCTTY);
+    port_fd = open(port_path, O_RDWR | O_NOCTTY);
 
     if(port_fd == -1)
     {
@@ -82,25 +144,29 @@ int main()
 
     int parser_error = PARSER_SUCCESS;
 
-    //check the space left in the buffer
-    buf_left = (&read_buf[BUFSIZ]) - ptr_end;
-    //read that many bytes (without blocking)
-	buf_len += read(port_fd, ptr_end, buf_left);
-    //update the end pointer
-    ptr_end = &ptr_start[buf_len];
-
-    parse_packet(&buf_len, &ptr_start);
-
-
-
-    if((parser_error == PARSER_UNDERFULL) && (buf_left == 0))
+    while(1)
     {
-        memmove(read_buf, ptr_start, buf_len);
-        ptr_start = read_buf;
-        ptr_end = &ptr_start[buf_len];
-        buf_left = (&read_buf[BUFSIZ]) - ptr_end;
-    }
 
+        //check the space left in the buffer
+        buf_left = BUFSIZ - buf_len;
+        //read that many bytes (without blocking)
+        buf_len += read(port_fd, ptr_end, buf_left);
+        //update the end pointer
+        ptr_end = &ptr_start[buf_len];
+
+        //read a packet and advance the pointers for used frames
+        parser_error = parse_packet(&buf_len, &ptr_start);
+
+
+        //move the pointers back to the beginning of the read buffer
+        if((parser_error == PARSER_UNDERFULL) && (buf_left == 0))
+        {
+            memmove(read_buf, ptr_start, buf_len);
+            ptr_start = read_buf;
+            ptr_end = &ptr_start[buf_len];
+            buf_left = BUFSIZ - buf_len;
+        }
+    }
 
 
     return 0;
