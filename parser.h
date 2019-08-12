@@ -1,6 +1,14 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+int parse_packet(size_t *buf_len, uint8_t* *buf);
+int parse_frame(uint8_t frame_type uint8_t cmd, uint16_t len, uint8_t* payload);
+int parse_cmd_frame(uint8_t cmd, uint16_t len, uint8_t* payload);
+int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload);
+int parse_info_frame(uint8_t cmd, uint16_t len, uint8_t* payload);
+int parse_error_frame(uint16_t len, uint8_t* payload);  //subset of answer frames
+
+
 const uint8_t CMD_EXE_FAILED = 0xff;//-0x1;
 const uint8_t CMD_GET_MODULE_INFO = 0x03;
 const uint8_t CMD_GET_POWER = 0xb7;//-0x49;
@@ -140,6 +148,7 @@ enum {
     PARSER_LENGTH_ERROR,
     PARSER_CHECKSUM_ERROR,
     PARSER_UNKNOWN_CMD,
+    PARSER_UNKNOWN_ERROR,
     PARSER_UNDOCUMENTED_CMD,
     PARSER_NEEDS_WORK,
 };

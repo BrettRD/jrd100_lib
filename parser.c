@@ -1,5 +1,6 @@
 #include "parser.h"
 #include "commands.h"
+#include "callbacks.h"
 
 int parse_packet(size_t *buf_len, uint8_t* *buf)
 {
@@ -247,7 +248,7 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             parser_error = ReadWriteDataFrame(len, payload, &pc, &epc_len, &epc, &error);
             if((parser_error == PARSER_SUCCESS) && (cb_write_data))
             {
-                cb_write_data(epc_len, pc, epc, error);
+                cb_write_data(pc, epc_len, epc, error);
             }
         }
         break;
@@ -260,7 +261,7 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             parser_error = ReadKillFrame(len, payload, &pc, &epc_len, &epc, &error);
             if((parser_error == PARSER_SUCCESS) && (cb_kill))
             {
-                cb_kill(epc_len, pc, epc, error);
+                cb_kill(pc, epc_len, epc, error);
             }
         }
         break;
@@ -273,7 +274,7 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             parser_error = ReadLockFrame(len, payload, &pc, &epc_len, &epc, &error);
             if((parser_error == PARSER_SUCCESS) && (cb_lock))
             {
-                cb_lock(epc_len, pc, epc, error);
+                cb_lock(pc, epc_len, epc, error);
             }
         }
         break;
@@ -367,201 +368,193 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
 
 
 
-void parse_error_frame(uint16_t len, uint8_t* payload)
+int parse_error_frame(uint16_t len, uint8_t* payload)
 {
     int parser_error = PARSER_NEEDS_WORK;
-    uint8_t error = payload[0];
-    switch(error)
+    uint16_t pc = 0;
+    uint8_t epc_len = 0;
+    uint8_t* epc = NULL;
+    uint8_t error = 0;
+    parser_error = read_tag_error_frame(len, payload, &pc, &epc_len, &epc, &error);
+    if(parser_error == PARSER_SUCCESS)
     {
-        case FAIL_ACCESS_PWD_ERROR:
+        switch(error)
         {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            case FAIL_ACCESS_PWD_ERROR:
             {
-                cb__();
+                if(cb_error_access_pwd)
+                {
+                    cb_error_access_pwd(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_CUSTOM_CMD_BASE:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_CUSTOM_CMD_BASE:
             {
-                cb__();
+                if(cb_error_custom_cmd)
+                {
+                    cb_error_custom_cmd(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_FHSS_FAIL:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_FHSS_FAIL:
             {
-                cb__();
+                if(cb_error_fhss_fail)
+                {
+                    cb_error_fhss_fail(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_INVALID_CMD:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_INVALID_CMD:
             {
-                cb__();
+                if(cb_error_invalid_cmd)
+                {
+                    cb_error_invalid_cmd(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_INVALID_PARA:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_INVALID_PARA:
             {
-                cb__();
+                if(cb_error_invalid_para)
+                {
+                    cb_error_invalid_para(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_INVENTORY_TAG_TIMEOUT:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_INVENTORY_TAG_TIMEOUT:
             {
-                cb__();
+                if(cb_error_inventory_tag_timeout)
+                {
+                    cb_error_inventory_tag_timeout(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_KILL_ERROR_CODE_BASE:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_KILL_ERROR_CODE_BASE:
             {
-                cb__();
+                if(cb_error_kill_base)
+                {
+                    cb_error_kill_base(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_KILL_NO_TAG:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_KILL_NO_TAG:
             {
-                cb__();
+                if(cb_error_kill_no_tag)
+                {
+                    cb_error_kill_no_tag(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_LOCK_ERROR_CODE_BASE:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_LOCK_ERROR_CODE_BASE:
             {
-                cb__();
+                if(cb_error_lock_base)
+                {
+                    cb_error_lock_base(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_LOCK_NO_TAG:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_LOCK_NO_TAG:
             {
-                cb__();
+                if(cb_error_lock_no_tag)
+                {
+                    cb_error_lock_no_tag(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_NXP_CHANGE_CONFIG_NO_TAG:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_NXP_CHANGE_CONFIG_NO_TAG:
             {
-                cb__();
+                if(cb_error_nxp_change_config_no_tag)
+                {
+                    cb_error_nxp_change_config_no_tag(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_NXP_CHANGE_EAS_NOT_SECURE:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_NXP_CHANGE_EAS_NOT_SECURE:
             {
-                cb__();
+                if(cb_error_nxp_eas_not_secure)
+                {
+                    cb_error_nxp_eas_not_secure(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_NXP_CHANGE_EAS_NO_TAG:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_NXP_CHANGE_EAS_NO_TAG:
             {
-                cb__();
+                if(cb_error_nxp_change_eas_no_tag)
+                {
+                    cb_error_nxp_change_eas_no_tag(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_NXP_EAS_ALARM_NO_TAG:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_NXP_EAS_ALARM_NO_TAG:
             {
-                cb__();
+                if(cb_error_nxp_eas_alarm_no_tag)
+                {
+                    cb_error_nxp_eas_alarm_no_tag(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_NXP_READPROTECT_NO_TAG:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_NXP_READPROTECT_NO_TAG:
             {
-                cb__();
+                if(cb_error_nxp_readprotect_no_tag)
+                {
+                    cb_error_nxp_readprotect_no_tag(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_NXP_RESET_READPROTECT_NO_TAG:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_NXP_RESET_READPROTECT_NO_TAG:
             {
-                cb__();
+                if(cb_error_nxp_reset_readprotect_no_tag)
+                {
+                    cb_error_nxp_reset_readprotect_no_tag(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_READ_ERROR_CODE_BASE:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_READ_ERROR_CODE_BASE:
             {
-                cb__();
+                if(cb_error_read_base)
+                {
+                    cb_error_read_base(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_READ_MEMORY_NO_TAG:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_READ_MEMORY_NO_TAG:
             {
-                cb__();
+                if(cb_error_read_no_tag)
+                {
+                    cb_error_read_no_tag(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_WRITE_ERROR_CODE_BASE:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_WRITE_ERROR_CODE_BASE:
             {
-                cb__();
+                if(cb_error_write_base)
+                {
+                    cb_error_write_base(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        case FAIL_WRITE_MEMORY_NO_TAG:
-        {
-            parser_error = ;
-            if((parser_error == PARSER_SUCCESS) && (cb__))
+            break;
+            case FAIL_WRITE_MEMORY_NO_TAG:
             {
-                cb__();
+                if(cb_error_write_no_tag)
+                {
+                    cb_error_write_no_tag(pc, epc_len, epc, error);
+                }
             }
-        }
-        break;
-        default:
-        {
-            //unknown error code
-            parser_error = PARSER_UNKNOWN_CMD;
+            break;
+            default:
+            {
+                //unknown error code
+                parser_error = PARSER_UNKNOWN_ERROR;
+            }
         }
     }
 }
 
 int parse_info_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
+{
+    int parser_error = PARSER_NEEDS_WORK;
+    return parser_error;
+}
+int parse_cmd_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
 {
     int parser_error = PARSER_NEEDS_WORK;
     return parser_error;

@@ -1,7 +1,5 @@
 #include "parser.h"
-
-
-
+#include "commands.h"
 
 /*
  * builds a command frame.
@@ -37,7 +35,7 @@ int read_tag_sucess_frame(uint16_t len, uint8_t* payload, uint16_t *pc, uint8_t 
     {
         return PARSER_LENGTH_ERROR;
     }
-
+    *epc_len = payload[0];
     *pc = (payload[1]<<8) + payload[2];
     *epc = &payload[3];
     *error = payload[3+epc_len_bytes];
@@ -56,6 +54,39 @@ int read_success_frame(uint16_t len, uint8_t* payload, uint8_t *error)
         return PARSER_LENGTH_ERROR;
     }
     *error = payload[0];
+    return PARSER_SUCCESS;
+}
+
+
+//all error codes have the error number in the first byte, with an optional epc.
+int read_error_frame(uint16_t len, uint8_t* payload, uint8_t *error)
+{
+    *error = payload[0];
+    return PARSER_SUCCESS;
+}
+
+int read_tag_error_frame(uint16_t len, uint8_t* payload, uint16_t *pc, uint8_t *epc_len, uint8_t* *epc, uint8_t *error)
+{
+    if(len == 1)
+    {
+        *pc = 0;
+        *epc_len = 0;
+        *epc = NULL;
+        return read_error_frame(len, payload, error);
+    }
+
+    int epc_len_bytes = payload[1];
+
+    if((epc_len_bytes+2) != len)
+    {
+        return PARSER_LENGTH_ERROR;
+    }
+
+    *error = payload[0];
+    *epc_len = payload[1];
+    *pc = (payload[2]<<8) + payload[3];
+    *epc = &payload[4];
+
     return PARSER_SUCCESS;
 }
 
@@ -130,7 +161,7 @@ int read_frame(size_t *buf_len, uint8_t* *buf, uint8_t *frame_type, uint8_t *cmd
 
 /*
  * calculates the checksum, assumes that the first byte is the FRAME_BEGIN header byte
- * len is the payload length as written in the paylaod.  Not including type, command, and len bytes (4 extra bytes for cs)
+ * len is the payload length as written in the payload.  Not including type, command, and len bytes (4 extra bytes for cs)
  */
 uint8_t calc_frame_checksum(uint8_t* frame, len)
 {
@@ -563,7 +594,7 @@ int ReadScanRssiFrame(uint16_t len, uint8_t* payload, uint8_t *ch_start, uint8_t
     return PARSER_SUCCESS;
 }
 
-uint8_t* BuildSetInventoryModeFrame(uint8_t* buf, uint8_t mode);
+uint8_t* BuildSetInventoryModeFrame(uint8_t* buf, uint8_t mode)
 {
     return build_cmd_frame(CMD_SET_INVENTORY_MODE, cmd, 1, &mode);
 }
@@ -648,21 +679,21 @@ int ReadSetSleepTimeFrame(uint16_t len, uint8_t* payload, uint8_t *idle_minutes)
 
 
 
-BuildNXPChangeEasFrame(uint8_t* buf, strAccessPasswd, cbxSetEas.Checked)
+uint8_t* BuildNXPChangeEasFrame(uint8_t* buf, strAccessPasswd, cbxSetEas.Checked)
 {
     uint8_t cmd = CMD_NXP_CHANGE_EAS;
     uint16_t len = 0;
     return build_cmd_frame(buf, cmd, len, NULL);
 }
 
-BuildNXPEasAlarmFrame(uint8_t* buf)
+uint8_t* BuildNXPEasAlarmFrame(uint8_t* buf)
 {
     uint8_t cmd = CMD_NXP_EAS_ALARM;
     uint16_t len = 0;
     return build_cmd_frame(buf, cmd, len, NULL);
 }
 
-BuildNXPReadProtectFrame(uint8_t* buf, strAccessPasswd, cbxReadProtectReset.Checked)
+uint8_t* BuildNXPReadProtectFrame(uint8_t* buf, strAccessPasswd, cbxReadProtectReset.Checked)
 {
     uint8_t cmd = CMD_NXP_READPROTECT;
     uint16_t len = 0;
@@ -670,7 +701,7 @@ BuildNXPReadProtectFrame(uint8_t* buf, strAccessPasswd, cbxReadProtectReset.Chec
 }
 
 
-BuildNXPResetReadProtectFrame(uint8_t* buf, strAccessPasswd, cbxReadProtectReset.Checked)
+uint8_t* BuildNXPResetReadProtectFrame(uint8_t* buf, strAccessPasswd, cbxReadProtectReset.Checked)
 {
     uint8_t cmd = CMD_NXP_RESET_READPROTECT;
     uint16_t len = 0;
@@ -717,41 +748,41 @@ int ReadInsertRfChFrame(uint16_t len, uint8_t* payload, uint8_t *error)
 }
 
 
-BuildSaveConfigToNvFrame(uint8_t* buf, NV_enable)
+uint8_t* BuildSaveConfigToNvFrame(uint8_t* buf, NV_enable)
 {
     uint8_t cmd = CMD_SAVE_NV_CONFIG;
     uint16_t len = ;
     return build_cmd_frame(buf, cmd, len, NULL);
 }
 
-BuildMonzaQTFrame(uint8_t* buf, strAccessPasswd, false, cbxMonzaQT_SR.Checked, cbxMonzaQT_MEM.Checked)
+uint8_t* BuildMonzaQTFrame(uint8_t* buf, strAccessPasswd, false, cbxMonzaQT_SR.Checked, cbxMonzaQT_MEM.Checked)
 {
     uint8_t cmd = ;
     uint16_t len = 0;
     return build_cmd_frame(buf, cmd, len, NULL);
 }
-BuildNXPChangeConfigFrame(uint8_t* buf, strAccessPasswd, Convert.ToInt32(txtConfigData.Text.Replace(" ",""), 16))
+uint8_t* BuildNXPChangeConfigFrame(uint8_t* buf, strAccessPasswd, Convert.ToInt32(txtConfigData.Text.Replace(" ",""), 16))
 {
     uint8_t cmd = CMD_NXP_CHANGE_CONFIG;
     uint16_t len = 0;
     return build_cmd_frame(buf, cmd, len, NULL);
 }
 
-BuildReadModemParaFrame(uint8_t* buf)
+uint8_t* BuildReadModemParaFrame(uint8_t* buf)
 {
     uint8_t cmd = CMD_READ_MODEM_PARA;
     uint16_t len = 0;
     return build_cmd_frame(buf, cmd, len, NULL);
 }
 
-BuildSetModemParaFrame(uint8_t* buf, mixerGain, IFAmpGain, signalTh)
+uint8_t* BuildSetModemParaFrame(uint8_t* buf, mixerGain, IFAmpGain, signalTh)
 {
     uint8_t cmd = CMD_SET_MODEM_PARA;
     uint16_t len = 0;
     return build_cmd_frame(buf, cmd, len, NULL);
 }
 
-BuildSetReaderEnvModeFrame(uint8_t* buf, (byte)cbxMode.SelectedIndex)
+uint8_t* BuildSetReaderEnvModeFrame(uint8_t* buf, (byte)cbxMode.SelectedIndex)
 {
     uint8_t cmd = CMD_SET_READER_ENV_MODE;
     uint16_t len = 0;
