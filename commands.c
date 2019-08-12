@@ -18,11 +18,12 @@ uint8_t* build_cmd_frame(uint8_t* buf, uint8_t cmd, uint16_t len, uint8_t* paylo
     //payload sits here
     buf[5 + len] = calc_frame_checksum(buf, len);
     buf[6 + len] = FRAME_END;
+    return buf;
 }
 
 uint8_t* build_cmd_empty_frame(uint8_t*buf, uint8_t cmd)
 {
-    return build_cmd_frame(buf, cmd, 0, NULL)
+    return build_cmd_frame(buf, cmd, 0, NULL);
 }
 
 /*
@@ -123,13 +124,13 @@ int read_frame(size_t *buf_len, uint8_t* *buf, uint8_t *frame_type, uint8_t *cmd
     uint8_t frame_header = frame[0];
     uint16_t payload_len = (frame[3] << 8) + frame[4];
 
-    uint8_t received_cs = payload[5 + payload_len];
+    uint8_t received_cs = frame[5 + payload_len];
     uint8_t expected_cs = calc_frame_checksum(frame, payload_len);
 
     uint8_t frame_terminator = frame[6 + payload_len];
 
     //check the packet
-    if(*buf_len < (7 + payload_len)
+    if(*buf_len < (7 + payload_len))
     {
         return PARSER_UNDERFULL;
     }
@@ -143,7 +144,7 @@ int read_frame(size_t *buf_len, uint8_t* *buf, uint8_t *frame_type, uint8_t *cmd
     }
     if(frame_terminator != FRAME_END)
     {
-        return PARSER_MALFORMED_TERMINATOR
+        return PARSER_MALFORMED_TERMINATOR;
     }
 
     //load the return values
@@ -163,7 +164,7 @@ int read_frame(size_t *buf_len, uint8_t* *buf, uint8_t *frame_type, uint8_t *cmd
  * calculates the checksum, assumes that the first byte is the FRAME_BEGIN header byte
  * len is the payload length as written in the payload.  Not including type, command, and len bytes (4 extra bytes for cs)
  */
-uint8_t calc_frame_checksum(uint8_t* frame, len)
+uint8_t calc_frame_checksum(uint8_t* frame, uint16_t len)
 {
     uint8_t cs = 0x00;
     for(int i=0; i<(4+len); i++)
@@ -180,7 +181,7 @@ uint8_t* BuildGetModuleInfoFrame(uint8_t* buf, uint8_t field)
 {
     uint8_t cmd = CMD_GET_MODULE_INFO;
     uint16_t len = 1;
-    return build_cmd_frame(buf, cmd, len, field);
+    return build_cmd_frame(buf, cmd, len, &field);
 }
 
 int ReadGetModuleInfoFrame(uint16_t len, uint8_t* payload, uint8_t *info_type, uint16_t *info_len, uint8_t* *info)
@@ -218,9 +219,9 @@ int ReadSetRfChannelFrame(uint16_t len, uint8_t* payload, uint8_t *error)
 }
 
 
-uint8_t* BuildGetSelectFrame(uint8_t* buf, )
+uint8_t* BuildGetSelectFrame(uint8_t* buf)
 {
-    return build_cmd_frame(buf, CMD_GET_SELECT_PARA);
+    return build_cmd_empty_frame(buf, CMD_GET_SELECT_PARA);
 }
 int ReadGetSelectFrame(uint16_t len, uint8_t* payload, uint8_t *target, uint8_t *action, uint8_t *bank, uint32_t *pointer, uint8_t *mask_len, uint8_t* *mask, bool *truncate)
 {
@@ -239,7 +240,7 @@ int ReadGetSelectFrame(uint16_t len, uint8_t* payload, uint8_t *target, uint8_t 
 
     *mask_len = payload[5];
     *truncate = (payload[6] == 0x80);
-    *mask = payload[7]
+    *mask = &payload[7];
 
     *target = (select_byte >> 5) & 0x07;
     *action = (select_byte >> 2) & 0x07;
@@ -257,7 +258,7 @@ float channel_freq_MHz(uint8_t region_index, uint8_t channel_index)
 uint8_t* BuildSetSelectFrame(uint8_t* buf, uint8_t target, uint8_t action, uint8_t bank, uint32_t pointer, uint8_t mask_len_bits, uint8_t* mask, bool truncate)
 {
     uint8_t cmd = CMD_SET_SELECT_PARA;
-    uint8_t mask_len_bytes = mask_len/8;
+    uint8_t mask_len_bytes = mask_len_bits/8;
     uint16_t len = 7 + mask_len_bytes;
     uint8_t select_byte = ((target &0x7)<<5) | ((action &0x7)<<2) | (bank &0x3);
     uint8_t* payload = buf;
@@ -330,7 +331,7 @@ uint8_t* BuildIoControlFrame(uint8_t* buf, uint8_t* io_payload)
     }
     uint8_t cmd = CMD_IO_CONTROL;
     uint16_t len = 3;
-    return build_cmd_frame(buf, cmd, len, uint8_t* io_payload);
+    return build_cmd_frame(buf, cmd, len, io_payload);
 }
 
 int ReadIoControlFrame(uint16_t len, uint8_t* payload, uint8_t* pin, uint8_t* config, uint8_t* dir)
@@ -361,7 +362,7 @@ uint8_t* BuildReadMultiFrame(uint8_t* buf, uint16_t tag_count)
 {
     uint8_t cmd = CMD_READ_MULTI;
     uint16_t len = 3;
-    uint8_t[3] payload;
+    uint8_t payload[3];
     payload[0] = 0x22;  //reserved byte, must be 0x22
     payload[1] = tag_count >> 8;
     payload[2] = tag_count & 0xff;
@@ -375,7 +376,7 @@ int ReadTagNotification(uint16_t len, uint8_t *payload, uint8_t *rssi, uint16_t 
     *rssi = payload[0];
     *pc = (payload[1]<<8) + payload[2];
     *epc = &payload[3]; //read in place
-    *crc = (payload[3 + epc_len] << 8) + payload[4 + epc_len];
+    *crc = (payload[3 + *epc_len] << 8) + payload[4 + *epc_len];
     //XXX check the tag CRC
     return PARSER_SUCCESS;
 }
@@ -401,8 +402,8 @@ uint8_t* BuildSetBaudFrame(uint8_t* buf, uint32_t baud_hz)
     uint8_t cmd = CMD_SET_BAUD;
     uint16_t len = 2;
     uint8_t payload[2];
-    payload[0] = ((baud/100) >> 8) && 0xff;
-    payload[1] =  (baud/100) && 0xff;
+    payload[0] = ((baud_hz/100) >> 8) && 0xff;
+    payload[1] =  (baud_hz/100) && 0xff;
 
     return build_cmd_frame(buf, cmd, len, payload);
 }
@@ -504,7 +505,7 @@ int ReadReadDataFrame(uint16_t len, uint8_t* payload, uint16_t *pc, uint8_t *epc
     return PARSER_SUCCESS;
 }
 
-uint8_t* BuildWriteDataFrame(uint8_t* buf, uint8_t* password, uint8_t bank, uint32_t data_ptr, uint32_t data_len, uint8_t* data);
+uint8_t* BuildWriteDataFrame(uint8_t* buf, uint8_t* password, uint8_t bank, uint32_t data_ptr, uint32_t data_len, uint8_t* data)
 {
     uint8_t cmd = CMD_WRITE_DATA;
     uint16_t len = 9 + data_len;
@@ -540,7 +541,7 @@ uint8_t* BuildLockFrame(uint8_t* buf, uint8_t* password, uint8_t* lock_payload)
     //allow the variables to overloap with buf
     uint8_t pwd[4];
     memcpy(pwd, password, 4); 
-    memmove(&payload[4], lock_payload, 3)
+    memmove(&payload[4], lock_payload, 3);
     memcpy(payload, pwd, 4);
 
     return build_cmd_frame(buf, cmd, len, payload);
@@ -590,13 +591,13 @@ int ReadScanRssiFrame(uint16_t len, uint8_t* payload, uint8_t *ch_start, uint8_t
     }
     *ch_start = payload[0];
     *ch_end = payload[1];
-    *channel_rssi =  &payload[2];
+    *channel_rssi = &payload[2];
     return PARSER_SUCCESS;
 }
 
 uint8_t* BuildSetInventoryModeFrame(uint8_t* buf, uint8_t mode)
 {
-    return build_cmd_frame(CMD_SET_INVENTORY_MODE, cmd, 1, &mode);
+    return build_cmd_frame(buf, CMD_SET_INVENTORY_MODE, 1, &mode);
 }
 int ReadSetInventoryModeFrame(uint16_t len, uint8_t* payload, uint8_t *error)
 {
@@ -609,44 +610,43 @@ uint8_t* BuildGetQueryFrame(uint8_t* buf)
 }
 int ReadGetQueryFrame(uint16_t len, uint8_t* payload, uint8_t *dr, uint8_t *m, uint8_t *trext, uint8_t *sel, uint8_t *session, uint8_t *target, uint8_t *q)
 {
-    if(len!=2)
+    if(len != 2)
     {
         return PARSER_LENGTH_ERROR;
     }
-    uint16_t bitmap = payload[1]<<8 + payload[0];
+    uint16_t bitmap = (payload[1] << 8) + payload[0];
     *dr      = (bitmap >> 15) & 0x01;
     *m       = (bitmap >> 13) & 0x03;
     *trext   = (bitmap >> 12) & 0x01;
     *sel     = (bitmap >> 10) & 0x03;
     *session = (bitmap >>  8) & 0x03;
     *target  = (bitmap >>  7) & 0x01;
-    *Q       = (bitmap >>  3) & 0x0F;
+    *q       = (bitmap >>  3) & 0x0F;
 
     return PARSER_SUCCESS;
 }
 
 
-uint8_t* BuildSetQueryFrame(uint8_t* buf, uint8_t dr, uint8_t m, uint8_t trext, uint8_t set, uint8_t session, uint8_t target, uint8_t q)
+uint8_t* BuildSetQueryFrame(uint8_t* buf, uint8_t dr, uint8_t m, uint8_t trext, uint8_t sel, uint8_t session, uint8_t target, uint8_t q)
 {
     uint8_t cmd = CMD_SET_QUERY;
     uint16_t len = 2;
-    uint16_t bitmap = 
-
     uint8_t payload[2];    
-    bitmap =
-        (dr         & 0x01)<<15) |
-        (m          & 0x03)<<13) |
-        (trext      & 0x01)<<12) |
-        (sel        & 0x03)<<10) |
-        (session    & 0x03)<< 8) |
-        (target     & 0x01)<< 7) |
-        (Q          & 0x0F)<< 3) ;
+    uint16_t bitmap =
+        ((dr         & 0x01)<<15) |
+        ((m          & 0x03)<<13) |
+        ((trext      & 0x01)<<12) |
+        ((sel        & 0x03)<<10) |
+        ((session    & 0x03)<< 8) |
+        ((target     & 0x01)<< 7) |
+        ((q          & 0x0F)<< 3) ;
      //lowest three bits are zero.
     
     payload[0] = bitmap >> 8;
-    payload[1] = bitmap & 0xff
+    payload[1] = bitmap & 0xff;
     return build_cmd_frame(buf, cmd, len, payload);
 }
+
 int ReadSetQueryFrame(uint16_t len, uint8_t* payload, uint8_t *error)
 {
     return read_success_frame(len, payload, error);

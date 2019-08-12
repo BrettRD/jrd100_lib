@@ -3,10 +3,11 @@
 
 CC = gcc
 CFLAGS  = -g -Wall
+
 default: main
 
-main: parser.o commands.o
-	$(CC) $(CFLAGS) -o main commands.o parser.o 
+main: main.c parser.o commands.o
+	$(CC) $(CFLAGS) -o main main.c commands.o parser.o 
 
 parser.o: parser.c parser.h commands.h callbacks.h
 	$(CC) $(CFLAGS) -c parser.c
@@ -14,4 +15,4 @@ parser.o: parser.c parser.h commands.h callbacks.h
 commands.o: commands.c parser.h commands.h callbacks.h
 	$(CC) $(CFLAGS) -c commands.c
 
-clean rm *.o main
+clean: rm *.o main

@@ -2,6 +2,34 @@
 #include "commands.h"
 #include "callbacks.h"
 
+
+
+const float REGION_FREQ_STARTS[] = 
+    {
+        REGION_CHN2_FREQ_START,
+        REGION_US_FREQ_START,
+        REGION_EUR_FREQ_START,
+        REGION_CHN1_FREQ_START,
+        REGION_JAPAN_FREQ_START,
+        REGION_KOREA_FREQ_START
+    };
+
+const float REGION_FREQ_SEPARATIONS[] = 
+    {
+        REGION_CHN2_FREQ_SEPARATION,
+        REGION_US_FREQ_SEPARATION,
+        REGION_EUR_FREQ_SEPARATION,
+        REGION_CHN1_FREQ_SEPARATION,
+        REGION_JAPAN_FREQ_SEPARATION,
+        REGION_KOREA_FREQ_SEPARATION
+    };
+
+
+
+
+
+
+
 int parse_packet(size_t *buf_len, uint8_t* *buf)
 {
     int parser_error = PARSER_NEEDS_WORK;
@@ -15,7 +43,7 @@ int parse_packet(size_t *buf_len, uint8_t* *buf)
     while((parser_error != PARSER_SUCCESS) && (parser_error != PARSER_UNDERFULL))
     {
         parser_error = read_frame(buf_len, buf, &frame_type, &cmd, &len, &payload);
-        if(parser_error != PARSER_SUCCESS) && (parser_error != PARSER_UNDERFULL))
+        if((parser_error != PARSER_SUCCESS) && (parser_error != PARSER_UNDERFULL))
         {
             skip_byte(buf_len, buf);
         }
@@ -31,7 +59,7 @@ int parse_packet(size_t *buf_len, uint8_t* *buf)
 }
 
 
-int parse_frame(uint8_t frame_type uint8_t cmd, uint16_t len, uint8_t* payload)
+int parse_frame(uint8_t frame_type, uint8_t cmd, uint16_t len, uint8_t* payload)
 {
     int parser_error = PARSER_NEEDS_WORK;
     switch(frame_type)
@@ -54,6 +82,7 @@ int parse_frame(uint8_t frame_type uint8_t cmd, uint16_t len, uint8_t* payload)
         default:
         {
             //unknown frame type
+            parser_error = PARSER_UNKNOWN_FRAME_TYPE;
         }
         break;
     }
@@ -76,7 +105,7 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             uint8_t info_type;
             uint16_t info_len;
             uint8_t* info;
-            parser_error = ReadGetModuleInfoFrame(len, payload, &info_type, &info_len, &info)
+            parser_error = ReadGetModuleInfoFrame(len, payload, &info_type, &info_len, &info);
             if((parser_error == PARSER_SUCCESS) && (cb_module_info))
             {
                 cb_module_info(info_type, info_len, info);
@@ -134,7 +163,7 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
         case CMD_GET_RF_CHANNEL:
         {
             uint8_t channel_index;
-            parser_error = int ReadGetRfChannelFrame(len, payload, &channel_index);
+            parser_error = ReadGetRfChannelFrame(len, payload, &channel_index);
             if((parser_error == PARSER_SUCCESS) && (cb_get_rf_channel))
             {
                 cb_get_rf_channel(channel_index);
@@ -186,7 +215,6 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             uint8_t* epc;
             uint16_t crc;
             parser_error = ReadTagNotification(len, payload, &rssi, &pc, &epc_len, &epc, &crc);
-            //XXX callback
             if(cmd == CMD_INVENTORY)
             {
                 cb_tag_single_notification(rssi, pc, epc_len, epc, crc);
@@ -199,10 +227,8 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
         break;
         case CMD_STOP_MULTI:
         {
-            uint8_t param;
-            parser_error = ReadStopReadFrame(len, payload, &param);
-            //XXX callback
-            //param should always be zero, docs unclear
+            uint8_t error;
+            parser_error = ReadStopReadFrame(len, payload, &error);
             if((parser_error == PARSER_SUCCESS) && (cb_io_frame))
             {
                 cb_stop_frame(error);
@@ -215,7 +241,7 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             uint8_t pin;
             uint8_t config;
             uint8_t dir;
-            parser_error = ReadIoControlFrame(len, payload, &pin, &config, &dir)
+            parser_error = ReadIoControlFrame(len, payload, &pin, &config, &dir);
             //figure out how to track pin state
             //probably direciton and level as high and low nibbles
             if((parser_error == PARSER_SUCCESS) && (cb_io_frame))
@@ -364,6 +390,7 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             parser_error = PARSER_UNKNOWN_CMD;
         }
     }
+    return parser_error;
 }
 
 
@@ -384,7 +411,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_access_pwd)
                 {
-                    cb_error_access_pwd(pc, epc_len, epc, error);
+                    cb_error_access_pwd(pc, epc_len, epc);
                 }
             }
             break;
@@ -392,7 +419,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_custom_cmd)
                 {
-                    cb_error_custom_cmd(pc, epc_len, epc, error);
+                    cb_error_custom_cmd(pc, epc_len, epc);
                 }
             }
             break;
@@ -400,7 +427,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_fhss_fail)
                 {
-                    cb_error_fhss_fail(pc, epc_len, epc, error);
+                    cb_error_fhss_fail(pc, epc_len, epc);
                 }
             }
             break;
@@ -408,7 +435,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_invalid_cmd)
                 {
-                    cb_error_invalid_cmd(pc, epc_len, epc, error);
+                    cb_error_invalid_cmd(pc, epc_len, epc);
                 }
             }
             break;
@@ -416,7 +443,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_invalid_para)
                 {
-                    cb_error_invalid_para(pc, epc_len, epc, error);
+                    cb_error_invalid_para(pc, epc_len, epc);
                 }
             }
             break;
@@ -424,7 +451,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_inventory_tag_timeout)
                 {
-                    cb_error_inventory_tag_timeout(pc, epc_len, epc, error);
+                    cb_error_inventory_tag_timeout(pc, epc_len, epc);
                 }
             }
             break;
@@ -432,7 +459,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_kill_base)
                 {
-                    cb_error_kill_base(pc, epc_len, epc, error);
+                    cb_error_kill_base(pc, epc_len, epc);
                 }
             }
             break;
@@ -440,7 +467,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_kill_no_tag)
                 {
-                    cb_error_kill_no_tag(pc, epc_len, epc, error);
+                    cb_error_kill_no_tag(pc, epc_len, epc);
                 }
             }
             break;
@@ -448,7 +475,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_lock_base)
                 {
-                    cb_error_lock_base(pc, epc_len, epc, error);
+                    cb_error_lock_base(pc, epc_len, epc);
                 }
             }
             break;
@@ -456,7 +483,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_lock_no_tag)
                 {
-                    cb_error_lock_no_tag(pc, epc_len, epc, error);
+                    cb_error_lock_no_tag(pc, epc_len, epc);
                 }
             }
             break;
@@ -464,7 +491,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_nxp_change_config_no_tag)
                 {
-                    cb_error_nxp_change_config_no_tag(pc, epc_len, epc, error);
+                    cb_error_nxp_change_config_no_tag(pc, epc_len, epc);
                 }
             }
             break;
@@ -472,7 +499,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_nxp_eas_not_secure)
                 {
-                    cb_error_nxp_eas_not_secure(pc, epc_len, epc, error);
+                    cb_error_nxp_eas_not_secure(pc, epc_len, epc);
                 }
             }
             break;
@@ -480,7 +507,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_nxp_change_eas_no_tag)
                 {
-                    cb_error_nxp_change_eas_no_tag(pc, epc_len, epc, error);
+                    cb_error_nxp_change_eas_no_tag(pc, epc_len, epc);
                 }
             }
             break;
@@ -488,7 +515,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_nxp_eas_alarm_no_tag)
                 {
-                    cb_error_nxp_eas_alarm_no_tag(pc, epc_len, epc, error);
+                    cb_error_nxp_eas_alarm_no_tag(pc, epc_len, epc);
                 }
             }
             break;
@@ -496,7 +523,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_nxp_readprotect_no_tag)
                 {
-                    cb_error_nxp_readprotect_no_tag(pc, epc_len, epc, error);
+                    cb_error_nxp_readprotect_no_tag(pc, epc_len, epc);
                 }
             }
             break;
@@ -504,7 +531,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_nxp_reset_readprotect_no_tag)
                 {
-                    cb_error_nxp_reset_readprotect_no_tag(pc, epc_len, epc, error);
+                    cb_error_nxp_reset_readprotect_no_tag(pc, epc_len, epc);
                 }
             }
             break;
@@ -512,7 +539,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_read_base)
                 {
-                    cb_error_read_base(pc, epc_len, epc, error);
+                    cb_error_read_base(pc, epc_len, epc);
                 }
             }
             break;
@@ -520,7 +547,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_read_no_tag)
                 {
-                    cb_error_read_no_tag(pc, epc_len, epc, error);
+                    cb_error_read_no_tag(pc, epc_len, epc);
                 }
             }
             break;
@@ -528,7 +555,7 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_write_base)
                 {
-                    cb_error_write_base(pc, epc_len, epc, error);
+                    cb_error_write_base(pc, epc_len, epc);
                 }
             }
             break;
@@ -536,17 +563,18 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
             {
                 if(cb_error_write_no_tag)
                 {
-                    cb_error_write_no_tag(pc, epc_len, epc, error);
+                    cb_error_write_no_tag(pc, epc_len, epc);
                 }
             }
             break;
             default:
             {
                 //unknown error code
-                parser_error = PARSER_UNKNOWN_ERROR;
+                parser_error = PARSER_UNKNOWN_ERROR_CODE;
             }
         }
     }
+    return parser_error;
 }
 
 int parse_info_frame(uint8_t cmd, uint16_t len, uint8_t* payload)

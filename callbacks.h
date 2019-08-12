@@ -1,7 +1,9 @@
-#include <stdint.h>
-
 #ifndef CALLBACKS_H
 #define CALLBACKS_H
+
+#include <stdint.h>
+
+
 //consider adding a callback context
 /*
 
