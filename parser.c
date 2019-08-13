@@ -24,7 +24,19 @@ const float REGION_FREQ_SEPARATIONS[] =
         REGION_KOREA_FREQ_SEPARATION
     };
 
-
+const char* parser_error_strings[] = {
+    "PARSER_SUCCESS",
+    "PARSER_UNDERFULL",
+    "PARSER_MALFORMED_HEADER",
+    "PARSER_MALFORMED_TERMINATOR",
+    "PARSER_LENGTH_ERROR",
+    "PARSER_CHECKSUM_ERROR",
+    "PARSER_UNKNOWN_FRAME_TYPE",
+    "PARSER_UNKNOWN_CMD",
+    "PARSER_UNKNOWN_ERROR_CODE",
+    "PARSER_UNDOCUMENTED_CMD",
+    "PARSER_NEEDS_WORK"
+};
 
 
 
@@ -54,6 +66,18 @@ int parse_packet(size_t *buf_len, uint8_t* *buf)
     }
 
     parser_error = parse_frame(frame_type, cmd, len, payload);
+
+    if
+    ((
+        (parser_error == PARSER_NEEDS_WORK) ||
+        (parser_error == PARSER_UNKNOWN_FRAME_TYPE) ||
+        (parser_error == PARSER_UNDOCUMENTED_CMD) ||
+        (parser_error == PARSER_UNKNOWN_CMD) ||
+        (parser_error == PARSER_UNKNOWN_ERROR_CODE)
+    ) && (cb_parser_error))
+    {
+        cb_parser_error(parser_error, frame_type, cmd, len, payload);
+    }
 
     return parser_error;
 }
@@ -206,25 +230,6 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             }
         }
         break;
-        case CMD_INVENTORY:
-        case CMD_READ_MULTI:
-        {
-            uint8_t rssi;
-            uint16_t pc;
-            uint8_t epc_len;
-            uint8_t* epc;
-            uint16_t crc;
-            parser_error = ReadTagNotification(len, payload, &rssi, &pc, &epc_len, &epc, &crc);
-            if(cmd == CMD_INVENTORY)
-            {
-                cb_tag_single_notification(rssi, pc, epc_len, epc, crc);
-            }
-            else
-            {
-                cb_tag_multi_notification(rssi, pc, epc_len, epc, crc);
-            }
-        }
-        break;
         case CMD_STOP_MULTI:
         {
             uint8_t error;
@@ -235,7 +240,6 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             }
         }
         break;
-
         case CMD_IO_CONTROL:
         {
             uint8_t pin;
@@ -250,7 +254,6 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
             }
         }
         break;
-
         case CMD_READ_DATA:
         {
             uint16_t pc;
@@ -580,8 +583,37 @@ int parse_error_frame(uint16_t len, uint8_t* payload)
 int parse_info_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
 {
     int parser_error = PARSER_NEEDS_WORK;
+
+    switch(cmd)
+    {
+        case CMD_INVENTORY:
+        case CMD_READ_MULTI:
+        {
+            uint8_t rssi;
+            uint16_t pc;
+            uint8_t epc_len;
+            uint8_t* epc;
+            uint16_t crc;
+            parser_error = ReadTagNotification(len, payload, &rssi, &pc, &epc_len, &epc, &crc);
+            if(cmd == CMD_INVENTORY)
+            {
+                cb_tag_single_notification(rssi, pc, epc_len, epc, crc);
+            }
+            else
+            {
+                cb_tag_multi_notification(rssi, pc, epc_len, epc, crc);
+            }
+        }
+        break;
+        default:
+        {
+            //unknown info code
+            parser_error = PARSER_NEEDS_WORK;
+        }
+    }
     return parser_error;
 }
+
 int parse_cmd_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
 {
     int parser_error = PARSER_NEEDS_WORK;

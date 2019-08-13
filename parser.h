@@ -159,6 +159,6 @@ enum {
     PARSER_UNDOCUMENTED_CMD,
     PARSER_NEEDS_WORK,
 };
-
+extern const char* parser_error_strings[];
 
 #endif //PARSER_H

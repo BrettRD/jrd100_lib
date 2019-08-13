@@ -583,7 +583,7 @@ uint8_t* BuildScanJammerFrame(size_t *buf_len, uint8_t* buf)
 }
 int ReadScanJammerFrame(uint16_t len, uint8_t* payload, uint8_t *ch_start, uint8_t *ch_end, uint8_t* *channel_noise)
 {
-    int channel_count = payload[1] - payload[0]; 
+    int channel_count = (payload[1] - payload[0]) + 1;
     if(len != channel_count + 2)
     {
         return PARSER_LENGTH_ERROR;
@@ -600,7 +600,7 @@ uint8_t* BuildScanRssiFrame(size_t *buf_len, uint8_t* buf)
 }
 int ReadScanRssiFrame(uint16_t len, uint8_t* payload, uint8_t *ch_start, uint8_t *ch_end, uint8_t* *channel_rssi)
 {
-    int channel_count = payload[1] - payload[0]; 
+    int channel_count = (payload[1] - payload[0]) + 1;
     if(len != channel_count + 2)
     {
         return PARSER_LENGTH_ERROR;

@@ -1,5 +1,8 @@
 #include "callbacks.h"
 
+
+void (*cb_parser_error)(int parser_error, uint8_t frame_type, uint8_t cmd, uint16_t len, uint8_t* payload) = NULL;
+
 void (*cb_module_info)(uint8_t info_type, uint16_t info_len, uint8_t* info) = NULL;
 void (*cb_get_power)(uint16_t power) = NULL;
 void (*cb_get_query)(uint8_t dr, uint8_t m, uint8_t trext, uint8_t sel, uint8_t session, uint8_t target, uint8_t q) = NULL;

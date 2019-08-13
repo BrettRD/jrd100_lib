@@ -19,4 +19,5 @@ callbacks.o: callbacks.c callbacks.h
 	$(CC) $(CFLAGS) -c callbacks.c
 
 
-clean: rm *.o main
+clean:
+	rm *.o main
