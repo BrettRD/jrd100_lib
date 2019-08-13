@@ -125,22 +125,30 @@ int read_frame(size_t *buf_len, uint8_t* *buf, uint8_t *frame_type, uint8_t *cmd
 {
     find_frame_begin(buf_len, buf);
 
+    //check we can safely read a header (minimum packet size)
+    if(*buf_len < 7)
+    {
+        return PARSER_UNDERFULL;
+    }
+
     //extract the packet metadata
     uint8_t* frame = *buf;
 
     uint8_t frame_header = frame[0];
     uint16_t payload_len = (frame[3] << 8) + frame[4];
 
-    uint8_t received_cs = frame[5 + payload_len];
-    uint8_t expected_cs = calc_frame_checksum(frame, payload_len);
-
-    uint8_t frame_terminator = frame[6 + payload_len];
-
     //check the packet
     if(*buf_len < (7 + payload_len))
     {
         return PARSER_UNDERFULL;
     }
+
+    //extract the rest of the payload
+    uint8_t received_cs = frame[5 + payload_len];
+    uint8_t expected_cs = calc_frame_checksum(frame, payload_len);
+    uint8_t frame_terminator = frame[6 + payload_len];
+
+
     if(frame_header != FRAME_BEGIN)
     {
         return PARSER_MALFORMED_HEADER;

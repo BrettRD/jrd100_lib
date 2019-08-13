@@ -59,7 +59,8 @@ bool step_sequence_tx()
                 write(port_fd, frame, len);
             break;
             case 5:
-                frame = BuildReadSingleFrame(&len, write_buffer);
+                frame = BuildReadMultiFrame(&len, write_buffer, 1000);
+                //frame = BuildReadSingleFrame(&len, write_buffer);
                 printf("Requesting a single read: %zu bytes\n", len);
                 write(port_fd, frame, len);
             break;
@@ -152,7 +153,7 @@ void print_error_cmd(int parser_error, uint8_t frame_type, uint8_t cmd, uint16_t
 void print_tag_timeout(uint16_t pc, uint8_t epc_len, uint8_t* epc)
 {
     printf("No Tags Found, poll timed out\n");
-    step_sequence_rx();
+    //step_sequence_rx();
 }
 
 
@@ -219,7 +220,7 @@ int main()
     uint8_t* ptr_start = read_buf;
     size_t buf_len = 0;
     size_t buf_left = BUFSIZ;
-
+    size_t total_bytes = 0;
     int parser_error = PARSER_SUCCESS;
     printf("Starting sequence\n");
 
@@ -228,13 +229,14 @@ int main()
     {
 
         //check the space left in the buffer
-        buf_left = BUFSIZ - buf_len;
+        buf_left = &read_buf[BUFSIZ] - ptr_end;
         //read that many bytes (without blocking)
         size_t read_len = read(port_fd, ptr_end, buf_left);
         buf_len += read_len;
+        total_bytes += read_len;
         if(read_len > 0)
         {
-            //printf("read buffer is %zu\n", buf_len);
+            printf("read buffer is %zu, total_bytes is at %zu\n", buf_len, total_bytes);
         }
 
         //update the end pointer
