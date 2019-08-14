@@ -52,8 +52,11 @@ uint8_t* BuildSetModuleSleepFrame(size_t *buf_len, uint8_t* buf);
 uint8_t* BuildGetPaPowerFrame(size_t *buf_len, uint8_t* buf);
 int ReadGetPaPowerFrame(uint16_t len, uint8_t* payload, uint16_t *power);
 
-uint8_t* BuildSetPaPowerFrame(size_t *buf_len, uint8_t* buf, float powerDBm);
+uint8_t* BuildSetPaPowerFrame(size_t *buf_len, uint8_t* buf, uint16_t power);
 int ReadSetPaPowerFrame(uint16_t len, uint8_t* payload, uint8_t *error);
+uint16_t power_to_uint(float power);
+float power_to_dbm(uint16_t power);
+
 
 uint8_t *BuildSetRegionFrame(size_t *buf_len, uint8_t* buf, uint8_t region_code);
 int ReadSetRegionFrame(uint16_t len, uint8_t* payload, uint8_t *error);

@@ -22,46 +22,102 @@ uint8_t write_buffer[BUFSIZ];
 int seq_step = 0;
 bool seq_tx = true;
 
+#define MAX_TAGS 1000
+size_t n_known_tags = 0;
+uint8_t known_tags[MAX_TAGS][12];
+
+uint8_t* find_tag(uint8_t* epc)
+{
+    for(int i=0; i< n_known_tags; i++)
+    {
+        if(0 == memcmp(epc, known_tags[i], 12))
+        {
+            return known_tags[i];
+        }
+    }
+    return NULL;
+}
+
+void step_sequence_rx()
+{
+    seq_tx = true;
+}
+
+void insert_tag(uint8_t epc_len, uint8_t* epc)
+{
+    if(epc_len != 12)
+    {
+        printf("tag insert error, wrong size\n");
+    }
+    if(n_known_tags < MAX_TAGS)
+    {
+        if(NULL == find_tag(epc))
+        {
+            memcpy(known_tags[n_known_tags++], epc, 12);
+            printf("added tag, total is %zu\n", n_known_tags);
+        }
+    }
+    else
+    {
+        printf("memory full\n");
+    }
+}
 
 //return false when finished
 bool step_sequence_tx()
 {
-
     size_t len = BUFSIZ;
     uint8_t *frame = write_buffer;
+    uint16_t power = 2600;
+
     if(seq_tx)
     {
         switch(seq_step)
         {
             case 0:
+                frame = BuildStopReadFrame(&len, write_buffer);
+                printf("Stopping previous reads: %zu bytes\n", len);
+                write(port_fd, frame, len);
+                break;
+            case 1:
                 frame = BuildGetModuleInfoFrame(&len, write_buffer, MODULE_HARDWARE_VERSION_FIELD);
                 printf("Requesting hardware version: %zu bytes\n", len);
                 write(port_fd, frame, len);
             break;
-            case 1:
+            case 2:
                 frame = BuildGetModuleInfoFrame(&len, write_buffer, MODULE_SOFTWARE_VERSION_FIELD);
                 printf("Requesting software version: %zu bytes\n", len);
                 write(port_fd, frame, len);
             break;
-            case 2:
+            case 3:
                 frame = BuildGetModuleInfoFrame(&len, write_buffer, MODULE_MANUFACTURE_INFO_FIELD);
                 printf("Requesting munufacturer info: %zu bytes\n", len);
                 write(port_fd, frame, len);
             break;
-            case 3:
+            case 4:
                 frame = BuildScanJammerFrame(&len, write_buffer);
                 printf("Requesting noise measurement: %zu bytes\n", len);
                 write(port_fd, frame, len);
             break;
-            case 4:
+            case 5:
                 frame = BuildScanRssiFrame(&len, write_buffer);
                 printf("Requesting rssi measurement: %zu bytes\n", len);
                 write(port_fd, frame, len);
             break;
-            case 5:
-                frame = BuildReadMultiFrame(&len, write_buffer, 1000);
+            case 6:
+                frame = BuildSetPaPowerFrame(&len, write_buffer, power);
+                printf("Setting tx power level to %d: %zu bytes\n", power , len);
+                write(port_fd, frame, len);
+            break;
+            case 7:
+                frame = BuildGetPaPowerFrame(&len, write_buffer);
+                printf("Requesting tx power level: %zu bytes\n", len);
+                write(port_fd, frame, len);
+            break;
+            case 8:
+                frame = BuildReadMultiFrame(&len, write_buffer, 8000);
                 //frame = BuildReadSingleFrame(&len, write_buffer);
-                printf("Requesting a single read: %zu bytes\n", len);
+                printf("Requesting a multiple read: %zu bytes\n", len);
                 write(port_fd, frame, len);
             break;
             default:
@@ -74,13 +130,6 @@ bool step_sequence_tx()
     return true;
 }
 
-void step_sequence_rx()
-{
-    if(!seq_tx)
-    {
-        seq_tx = true;
-    }
-}
 
 
 void print_module_info(uint8_t info_type, uint16_t info_len, uint8_t* info)
@@ -116,6 +165,7 @@ void print_noise_scan(uint8_t ch_start, uint8_t ch_end, uint8_t* channel_noise)
     }
     step_sequence_rx();
 }
+
 void print_rssi_scan(uint8_t ch_start, uint8_t ch_end, uint8_t* channel_rssi)
 {
     printf("RSSI scan:\n");
@@ -126,14 +176,22 @@ void print_rssi_scan(uint8_t ch_start, uint8_t ch_end, uint8_t* channel_rssi)
     step_sequence_rx();
 }
 
+void print_tx_power(uint16_t power)
+{
+    printf("Tx power: %d\n", power);
+    step_sequence_rx();
+}
+
 void print_discovered_tag(uint8_t rssi, uint16_t pc, uint8_t epc_len, uint8_t* epc, uint16_t crc)
 {
-    printf("Found tag\n    epc = ");
-    for(int i=0; i<epc_len; i++)
-    {
-        printf("%.2x", epc[i]);
-    }
-    printf("\n    rssi = %d\n", rssi);
+    //printf("Found tag\n    epc = ");
+    //for(int i=0; i<epc_len; i++)
+    //{
+    //    printf("%.2x", epc[i]);
+    //}
+    //printf("\n    rssi = %d\n", rssi);
+    insert_tag(epc_len, epc);
+
     //step_sequence_rx();
 }
 
@@ -156,16 +214,31 @@ void print_tag_timeout(uint16_t pc, uint8_t epc_len, uint8_t* epc)
     //step_sequence_rx();
 }
 
+void response_success(uint8_t error)
+{
+    if(error == 0)
+    {
+        printf("OK.\n");
+    }
+    else
+    {
+        printf("Non-zero return");
+    }
+    step_sequence_rx();
+}
 
 int main()
 {
-
     cb_parser_error = print_error_cmd;
-    cb_error_inventory_tag_timeout = print_tag_timeout;
+    cb_set_power = response_success;
+    cb_stop_frame = response_success;
+
     cb_module_info = print_module_info;
     cb_scan_jammer = print_noise_scan;
     cb_scan_rssi = print_rssi_scan;
+    cb_get_power = print_tx_power;
     cb_tag_single_notification = print_discovered_tag;
+    cb_error_inventory_tag_timeout = print_tag_timeout;
 
     port_fd = open(port_path, O_RDWR | O_NOCTTY);
 
@@ -206,8 +279,8 @@ int main()
     /* disable output processing */
     port_settings.c_oflag &= ~OPOST;
 
-    port_settings.c_cc[VTIME] = 0.001;
-    port_settings.c_cc[VMIN] = 0;   //don't block
+    port_settings.c_cc[VTIME] = 0.001;  //short timeout
+    port_settings.c_cc[VMIN] = 1;   //read one byte at minimum, blocking
 
 	if(tcsetattr(port_fd, TCSANOW, &port_settings) != 0)
     {
@@ -220,7 +293,6 @@ int main()
     uint8_t* ptr_start = read_buf;
     size_t buf_len = 0;
     size_t buf_left = BUFSIZ;
-    size_t total_bytes = 0;
     int parser_error = PARSER_SUCCESS;
     printf("Starting sequence\n");
 
@@ -233,34 +305,23 @@ int main()
         //read that many bytes (without blocking)
         size_t read_len = read(port_fd, ptr_end, buf_left);
         buf_len += read_len;
-        total_bytes += read_len;
-        if(read_len > 0)
-        {
-            printf("read buffer is %zu, total_bytes is at %zu\n", buf_len, total_bytes);
-        }
+
 
         //update the end pointer
         ptr_end = &ptr_start[buf_len];
 
         //read a packet and advance the pointers for used frames
         parser_error = parse_packet(&buf_len, &ptr_start);
-        if(parser_error == PARSER_SUCCESS)
-        {
-            printf("packet parsed\n");
-        }
-//        else if(parser_error != PARSER_UNDERFULL)
-//        {
-//            printf("packet parse error: %s\n", parser_error_strings[parser_error]);
-//        }
 
-        //move the pointers back to the beginning of the read buffer
-        if((parser_error == PARSER_UNDERFULL) && (buf_left == 0))
+        //move the active buffer back to the beginning of the read buffer
+        if(((parser_error == PARSER_UNDERFULL) && (buf_left == 0)) || (buf_len == 0))
         {
             memmove(read_buf, ptr_start, buf_len);
             ptr_start = read_buf;
             ptr_end = &ptr_start[buf_len];
             buf_left = BUFSIZ - buf_len;
         }
+
     }
 
 

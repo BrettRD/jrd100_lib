@@ -457,18 +457,29 @@ int ReadGetPaPowerFrame(uint16_t len, uint8_t* payload, uint16_t *power)
     return PARSER_SUCCESS;
 }
 
-uint8_t* BuildSetPaPowerFrame(size_t *buf_len, uint8_t* buf, float powerDBm)
+
+
+uint8_t* BuildSetPaPowerFrame(size_t *buf_len, uint8_t* buf, uint16_t power)
 {
     uint8_t cmd = CMD_SET_POWER;
     uint16_t len = 2;
     uint8_t payload[2];
-    payload[0] = (((uint16_t)(powerDBm*100)) >> 8) && 0xff;
-    payload[1] =  ((uint16_t)(powerDBm*100)) && 0xff;
+    payload[0] = (power >> 8) && 0xff;
+    payload[1] =  power && 0xff;
     return build_cmd_frame(buf_len, buf, cmd, len, payload);
 }
 int ReadSetPaPowerFrame(uint16_t len, uint8_t* payload, uint8_t *error)
 {
     return read_success_frame(len, payload, error);
+}
+
+uint16_t power_to_uint(float power)
+{
+    return power * 100;
+}
+float power_to_dbm(uint16_t power)
+{
+    return ((float)power)/100.0;
 }
 
 uint8_t *BuildSetRegionFrame(size_t *buf_len, uint8_t* buf, uint8_t region_code)

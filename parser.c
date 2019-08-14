@@ -234,7 +234,7 @@ int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload)
         {
             uint8_t error;
             parser_error = ReadStopReadFrame(len, payload, &error);
-            if((parser_error == PARSER_SUCCESS) && (cb_io_frame))
+            if((parser_error == PARSER_SUCCESS) && (cb_stop_frame))
             {
                 cb_stop_frame(error);
             }
