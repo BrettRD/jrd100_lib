@@ -5,13 +5,15 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h>
+#include "callbacks.h"
 
-int parse_packet(size_t *buf_len, uint8_t* *buf);
-int parse_frame(uint8_t frame_type, uint8_t cmd, uint16_t len, uint8_t* payload);
-int parse_cmd_frame(uint8_t cmd, uint16_t len, uint8_t* payload);
-int parse_ans_frame(uint8_t cmd, uint16_t len, uint8_t* payload);
-int parse_info_frame(uint8_t cmd, uint16_t len, uint8_t* payload);
-int parse_error_frame(uint16_t len, uint8_t* payload);  //subset of answer frames
+
+int parse_packet(jdm_100_cb_t *cb, size_t *buf_len, uint8_t* *buf);
+int parse_frame(jdm_100_cb_t *cb, uint8_t frame_type, uint8_t cmd, uint16_t len, uint8_t* payload);
+int parse_cmd_frame(jdm_100_cb_t *cb, uint8_t cmd, uint16_t len, uint8_t* payload);
+int parse_ans_frame(jdm_100_cb_t *cb, uint8_t cmd, uint16_t len, uint8_t* payload);
+int parse_info_frame(jdm_100_cb_t *cb, uint8_t cmd, uint16_t len, uint8_t* payload);
+int parse_error_frame(jdm_100_cb_t *cb, uint16_t len, uint8_t* payload);  //subset of answer frames
 
 
 #define CMD_EXE_FAILED                      (0xff)    //-0x1;

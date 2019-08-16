@@ -132,7 +132,7 @@ bool step_sequence_tx()
 
 
 
-void print_module_info(uint8_t info_type, uint16_t info_len, uint8_t* info)
+void print_module_info(void* context, uint8_t info_type, uint16_t info_len, uint8_t* info)
 {
     info[info_len] = '\0';  //This edits the read buffer, but we're already finished with that data.
     switch (info_type)
@@ -156,7 +156,7 @@ void print_module_info(uint8_t info_type, uint16_t info_len, uint8_t* info)
     step_sequence_rx();
 }
 
-void print_noise_scan(uint8_t ch_start, uint8_t ch_end, uint8_t* channel_noise)
+void print_noise_scan(void* context, uint8_t ch_start, uint8_t ch_end, uint8_t* channel_noise)
 {
     printf("Noise scan:\n");
     for(int i=ch_start; i<ch_end; i++)
@@ -166,7 +166,7 @@ void print_noise_scan(uint8_t ch_start, uint8_t ch_end, uint8_t* channel_noise)
     step_sequence_rx();
 }
 
-void print_rssi_scan(uint8_t ch_start, uint8_t ch_end, uint8_t* channel_rssi)
+void print_rssi_scan(void* context, uint8_t ch_start, uint8_t ch_end, uint8_t* channel_rssi)
 {
     printf("RSSI scan:\n");
     for(int i=ch_start; i<ch_end; i++)
@@ -176,13 +176,13 @@ void print_rssi_scan(uint8_t ch_start, uint8_t ch_end, uint8_t* channel_rssi)
     step_sequence_rx();
 }
 
-void print_tx_power(uint16_t power)
+void print_tx_power(void* context, uint16_t power)
 {
     printf("Tx power: %d\n", power);
     step_sequence_rx();
 }
 
-void print_discovered_tag(uint8_t rssi, uint16_t pc, uint8_t epc_len, uint8_t* epc, uint16_t crc)
+void print_discovered_tag(void* context, uint8_t rssi, uint16_t pc, uint8_t epc_len, uint8_t* epc, uint16_t crc)
 {
     //printf("Found tag\n    epc = ");
     //for(int i=0; i<epc_len; i++)
@@ -195,7 +195,7 @@ void print_discovered_tag(uint8_t rssi, uint16_t pc, uint8_t epc_len, uint8_t* e
     //step_sequence_rx();
 }
 
-void print_error_cmd(int parser_error, uint8_t frame_type, uint8_t cmd, uint16_t len, uint8_t* payload)
+void print_error_cmd(void* context, int parser_error, uint8_t frame_type, uint8_t cmd, uint16_t len, uint8_t* payload)
 {
     printf("Parser error: %s\n", parser_error_strings[parser_error]);
     printf("    frame_type: %.2x\n", frame_type);
@@ -208,13 +208,13 @@ void print_error_cmd(int parser_error, uint8_t frame_type, uint8_t cmd, uint16_t
     printf("\n");
 }
 
-void print_tag_timeout(uint16_t pc, uint8_t epc_len, uint8_t* epc)
+void print_tag_timeout(void* context, uint16_t pc, uint8_t epc_len, uint8_t* epc)
 {
     printf("No Tags Found, poll timed out\n");
     //step_sequence_rx();
 }
 
-void response_success(uint8_t error)
+void response_success(void* context, uint8_t error)
 {
     if(error == 0)
     {
@@ -229,16 +229,20 @@ void response_success(uint8_t error)
 
 int main()
 {
-    cb_parser_error = print_error_cmd;
-    cb_set_power = response_success;
-    cb_stop_frame = response_success;
 
-    cb_module_info = print_module_info;
-    cb_scan_jammer = print_noise_scan;
-    cb_scan_rssi = print_rssi_scan;
-    cb_get_power = print_tx_power;
-    cb_tag_single_notification = print_discovered_tag;
-    cb_error_inventory_tag_timeout = print_tag_timeout;
+    jdm_100_cb_t cb = {NULL};
+    cb.context = NULL;
+
+    cb.cb_parser_error = print_error_cmd;
+    cb.cb_set_power = response_success;
+    cb.cb_stop_frame = response_success;
+
+    cb.cb_module_info = print_module_info;
+    cb.cb_scan_jammer = print_noise_scan;
+    cb.cb_scan_rssi = print_rssi_scan;
+    cb.cb_get_power = print_tx_power;
+    cb.cb_tag_single_notification = print_discovered_tag;
+    cb.cb_error_inventory_tag_timeout = print_tag_timeout;
 
     port_fd = open(port_path, O_RDWR | O_NOCTTY);
 
@@ -311,7 +315,7 @@ int main()
         ptr_end = &ptr_start[buf_len];
 
         //read a packet and advance the pointers for used frames
-        parser_error = parse_packet(&buf_len, &ptr_start);
+        parser_error = parse_packet(&cb, &buf_len, &ptr_start);
 
         //move the active buffer back to the beginning of the read buffer
         if(((parser_error == PARSER_UNDERFULL) && (buf_left == 0)) || (buf_len == 0))
