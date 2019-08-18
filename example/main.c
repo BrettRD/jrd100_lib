@@ -310,7 +310,6 @@ int main()
         size_t read_len = read(port_fd, ptr_end, buf_left);
         buf_len += read_len;
 
-
         //update the end pointer
         ptr_end = &ptr_start[buf_len];
 
