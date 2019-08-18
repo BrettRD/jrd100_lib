@@ -385,10 +385,12 @@ int parse_ans_frame(jdm_100_cb_t *cb, uint8_t cmd, uint16_t len, uint8_t* payloa
         {
             parser_error = PARSER_UNDOCUMENTED_CMD;
         }
+        break;
         default:
         {
             parser_error = PARSER_UNKNOWN_CMD;
         }
+        break;
     }
     return parser_error;
 }
@@ -572,6 +574,7 @@ int parse_error_frame(jdm_100_cb_t *cb, uint16_t len, uint8_t* payload)
                 //unknown error code
                 parser_error = PARSER_UNKNOWN_ERROR_CODE;
             }
+            break;
         }
     }
     return parser_error;
@@ -607,6 +610,7 @@ int parse_info_frame(jdm_100_cb_t *cb, uint8_t cmd, uint16_t len, uint8_t* paylo
             //unknown info code
             parser_error = PARSER_NEEDS_WORK;
         }
+        break;
     }
     return parser_error;
 }
